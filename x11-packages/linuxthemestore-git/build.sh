@@ -3,8 +3,8 @@ TERMUX_PKG_DESCRIPTION="A Linux desktop app to install Linux themes"
 TERMUX_PKG_LICENSE="MIT"
 TERMUX_PKG_MAINTAINER="sabamdarif"
 TERMUX_PKG_VERSION=1.0.1
-TERMUX_PKG_SRCURL=git+https://github.com/sabamdarif/linuxthemestore
-TERMUX_PKG_GIT_BRANCH=test
+TERMUX_PKG_SRCURL=git+https://github.com/debasish-patra-1987/linuxthemestore
+TERMUX_PKG_GIT_BRANCH=main
 TERMUX_PKG_DEPENDS="libadwaita, gtk4"
 TERMUX_PKG_BUILD_DEPENDS="glib, openssl, pkg-config, xorgproto, pango"
 TERMUX_PKG_AUTO_UPDATE=true
@@ -14,6 +14,11 @@ termux_step_post_get_source() {
 	# Remove meson-specific files if they exist
 	rm -f "$TERMUX_PKG_SRCDIR/meson.build"
 	rm -rf "$TERMUX_PKG_SRCDIR/build-aux"
+
+	# Fix hardcoded paths in Rust source for Termux compatibility
+	sed -i 's|/tmp|/data/data/com.termux/files/usr/tmp|g' "$TERMUX_PKG_SRCDIR/src/main.rs"
+	sed -i 's|/usr/share/icons|/data/data/com.termux/files/usr/share/icons|g' "$TERMUX_PKG_SRCDIR/src/main.rs"
+	sed -i 's|/usr/share/themes|/data/data/com.termux/files/usr/share/themes|g' "$TERMUX_PKG_SRCDIR/src/main.rs"
 }
 
 termux_step_make() {
