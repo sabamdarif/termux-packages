@@ -22,5 +22,4 @@ termux_step_pre_configure() {
 	termux_setup_meson
 	termux_setup_gir
 	termux_setup_glib_cross_pkg_config_wrapper
-	echo "sqlite3_has_fts5 = true" >>$TERMUX_MESON_CROSSFILE
 }
