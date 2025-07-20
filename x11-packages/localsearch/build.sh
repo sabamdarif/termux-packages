@@ -12,6 +12,7 @@ TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 -Dsystemd_user_services=false
 -Dlandlock=disabled
 "
+
 termux_step_pre_configure() {
 	termux_setup_cmake
 	termux_setup_meson
@@ -19,5 +20,5 @@ termux_step_pre_configure() {
 }
 
 termux_step_post_make_install() {
-    rm -rf $TERMUX_PREFIX/lib/python*/site-packages/asciidoc
+	rm -rf $TERMUX_PREFIX/lib/python*/site-packages/asciidoc
 }
