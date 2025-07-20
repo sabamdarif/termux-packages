@@ -6,7 +6,7 @@ TERMUX_PKG_VERSION=3.9.0
 TERMUX_PKG_SRCURL=https://github.com/GNOME/localsearch/archive/refs/tags/${TERMUX_PKG_VERSION}.tar.gz
 TERMUX_PKG_SHA256=6d8d5ff2a2320632e2cd14ef5a9c6a57d67430ac71d36428a257404a81dcf943
 TERMUX_PKG_DEPENDS="asciidoc, dbus, glib, sqlite, gstreamer, upower, totem-pl-parser, libexif, gexiv2, libgxps, libseccomp, libpng, ffmpeg, libportal, libportal-gtk3, libportal-gtk4"
-TERMUX_PKG_BUILD_DEPENDS="libseccomp, asciidoc, gettext"
+TERMUX_PKG_BUILD_DEPENDS="libseccomp, asciidoc, gettext, glib-cross"
 TERMUX_PKG_PYTHON_COMMON_DEPS="jinja2, markupsafe, markdown, pygments, typogrify, docutils"
 TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 -Dsystemd_user_services=false
@@ -16,6 +16,7 @@ TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 termux_step_pre_configure() {
 	termux_setup_cmake
 	termux_setup_meson
+	termux_setup_glib_cross_pkg_config_wrapper
 	export TERMUX_MESON_ENABLE_SOVERSION=1
 }
 
