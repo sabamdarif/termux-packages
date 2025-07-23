@@ -1,0 +1,326 @@
+From c9f96b309a041c84f0040555f672dc66b41758a7 Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Wed, 23 Jul 2025 12:46:56 +0530
+Subject: [PATCH 3/6] remove udev dependence from gsd device manager
+
+---
+ panels/common/gsd-device-manager.c | 216 ++++++++++++++---------------
+ panels/common/meson.build          |   2 -
+ 2 files changed, 107 insertions(+), 111 deletions(-)
+
+diff --git a/panels/common/gsd-device-manager.c b/panels/common/gsd-device-manager.c
+index 5a5002e..4cbdb61 100644
+--- a/panels/common/gsd-device-manager.c
++++ b/panels/common/gsd-device-manager.c
+@@ -22,7 +22,10 @@
+ #include "config.h"
+ 
+ #include <string.h>
+-#include <gudev/gudev.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <dirent.h>
++#include <unistd.h>
+ 
+ #include "gsd-device-manager.h"
+ #include "gsd-common-enums.h"
+@@ -54,7 +57,8 @@ typedef struct
+ {
+         GObject parent_instance;
+ 	GHashTable *devices;
+-	GUdevClient *udev_client;
++	/* Timer for periodic device scanning in Termux */
++	guint scan_timer_id;
+ } GsdDeviceManagerPrivate;
+ 
+ enum {
+@@ -75,16 +79,6 @@ enum {
+ 	N_SIGNALS
+ };
+ 
+-/* Index matches GsdDeviceType */
+-const gchar *udev_ids[] = {
+-	"ID_INPUT_MOUSE",
+-	"ID_INPUT_KEYBOARD",
+-	"ID_INPUT_TOUCHPAD",
+-	"ID_INPUT_TABLET",
+-	"ID_INPUT_TOUCHSCREEN",
+-	"ID_INPUT_TABLET_PAD",
+-};
+-
+ static guint signals[N_SIGNALS] = { 0 };
+ 
+ G_DEFINE_TYPE_WITH_PRIVATE (GsdDeviceManager, gsd_device_manager, G_TYPE_OBJECT)
+@@ -273,8 +267,12 @@ gsd_device_manager_finalize (GObject *object)
+ 	GsdDeviceManager *manager = GSD_DEVICE_MANAGER (object);
+         GsdDeviceManagerPrivate *priv = gsd_device_manager_get_instance_private (manager);
+ 
++	if (priv->scan_timer_id) {
++		g_source_remove (priv->scan_timer_id);
++		priv->scan_timer_id = 0;
++	}
++
+ 	g_hash_table_destroy (priv->devices);
+-	g_object_unref (priv->udev_client);
+ 
+ 	G_OBJECT_CLASS (gsd_device_manager_parent_class)->finalize (object);
+ }
+@@ -391,146 +389,146 @@ gsd_device_manager_class_init (GsdDeviceManagerClass *klass)
+ 			      GSD_TYPE_DEVICE | G_SIGNAL_TYPE_STATIC_SCOPE);
+ }
+ 
++/* Simple device detection for Termux - reads /dev/input/event* files */
+ static GsdDeviceType
+-udev_device_get_device_type (GUdevDevice *device)
++detect_device_type_from_file (const gchar *device_file)
+ {
+ 	GsdDeviceType type = 0;
+-	gint i;
+-
+-	for (i = 0; i < G_N_ELEMENTS (udev_ids); i++) {
+-		if (g_udev_device_get_property_as_boolean (device, udev_ids[i]))
+-			type |= (1 << i);
+-	}
++	
++	/* In Termux, we have limited hardware detection capabilities
++	 * This is a simple heuristic based on device file names */
++	if (strstr (device_file, "mouse") != NULL)
++		type |= GSD_DEVICE_TYPE_MOUSE;
++	else if (strstr (device_file, "keyboard") != NULL)
++		type |= GSD_DEVICE_TYPE_KEYBOARD;
++	else if (strstr (device_file, "touchscreen") != NULL)
++		type |= GSD_DEVICE_TYPE_TOUCHSCREEN;
++	else if (strstr (device_file, "touchpad") != NULL)
++		type |= GSD_DEVICE_TYPE_TOUCHPAD;
++	else if (strstr (device_file, "tablet") != NULL)
++		type |= GSD_DEVICE_TYPE_TABLET;
++	else
++		/* Default to generic input device */
++		type = GSD_DEVICE_TYPE_MOUSE;
+ 
+ 	return type;
+ }
+ 
+-static gboolean
+-device_is_evdev (GUdevDevice *device)
++static gchar *
++get_device_name_from_file (const gchar *device_file)
+ {
+-	const gchar *device_file;
+-
+-	device_file = g_udev_device_get_device_file (device);
+-
+-	if (!device_file || strstr (device_file, "/event") == NULL)
+-		return FALSE;
+-
+-	return g_udev_device_get_property_as_boolean (device, "ID_INPUT");
++	FILE *fp;
++	gchar *name_file;
++	gchar *name = NULL;
++	gchar buffer[256];
++
++	/* Try to read device name from sysfs if available */
++	name_file = g_strdup_printf ("/sys/class/input/%s/device/name", 
++	                            g_path_get_basename (device_file));
++	
++	fp = fopen (name_file, "r");
++	if (fp) {
++		if (fgets (buffer, sizeof (buffer), fp)) {
++			/* Remove trailing newline */
++			gchar *newline = strchr (buffer, '\n');
++			if (newline)
++				*newline = '\0';
++			name = g_strdup (buffer);
++		}
++		fclose (fp);
++	}
++	
++	g_free (name_file);
++	
++	/* Fallback to basename if we can't read the name */
++	if (!name)
++		name = g_strdup (g_path_get_basename (device_file));
++	
++	return name;
+ }
+ 
+ static GsdDevice *
+-create_device (GUdevDevice *udev_device, GUdevDevice *parent)
++create_device_from_file (const gchar *device_file)
+ {
+-	const gchar *vendor, *product, *name, *group;
+-	guint width, height;
+-
+-	name = g_udev_device_get_sysfs_attr (parent, "name");
+-	vendor = g_udev_device_get_property (udev_device, "ID_VENDOR_ID");
+-	product = g_udev_device_get_property (udev_device, "ID_MODEL_ID");
+-
+-	if (!vendor || !product) {
+-		vendor = g_udev_device_get_sysfs_attr (udev_device, "device/id/vendor");
+-		product = g_udev_device_get_sysfs_attr (udev_device, "device/id/product");
+-	}
+-
+-	width = g_udev_device_get_property_as_int (udev_device, "ID_INPUT_WIDTH_MM");
+-	height = g_udev_device_get_property_as_int (udev_device, "ID_INPUT_HEIGHT_MM");
++	gchar *name;
++	GsdDeviceType type;
+ 
+-	group = g_udev_device_get_property (udev_device, "LIBINPUT_DEVICE_GROUP");
++	name = get_device_name_from_file (device_file);
++	type = detect_device_type_from_file (device_file);
+ 
+ 	return g_object_new (GSD_TYPE_DEVICE,
+ 			     "name", name,
+-			     "device-file", g_udev_device_get_device_file (udev_device),
+-			     "type", udev_device_get_device_type (udev_device),
+-			     "vendor-id", vendor,
+-			     "product-id", product,
+-			     "width", width,
+-			     "height", height,
+-			     "group", group,
++			     "device-file", device_file,
++			     "type", type,
++			     "vendor-id", "0000", /* Default values for Termux */
++			     "product-id", "0000",
++			     "width", 0,
++			     "height", 0,
++			     "group", NULL,
+ 			     NULL);
+ }
+ 
+ static void
+-add_device (GsdDeviceManager *manager,
+-	    GUdevDevice	     *udev_device)
++scan_input_devices (GsdDeviceManager *manager)
+ {
+-        GsdDeviceManagerPrivate *priv = gsd_device_manager_get_instance_private (manager);
+-	g_autoptr(GUdevDevice) parent = NULL;
++	GsdDeviceManagerPrivate *priv = gsd_device_manager_get_instance_private (manager);
++	DIR *dir;
++	struct dirent *entry;
++	gchar *device_path;
+ 	GsdDevice *device;
+-	const gchar *syspath;
+-
+-	parent = g_udev_device_get_parent (udev_device);
+ 
+-	if (!parent)
++	/* Scan /dev/input for event devices */
++	dir = opendir ("/dev/input");
++	if (!dir)
+ 		return;
+ 
+-	device = create_device (udev_device, parent);
+-	syspath = g_udev_device_get_sysfs_path (udev_device);
+-	g_hash_table_insert (priv->devices, g_strdup (syspath), device);
+-	g_signal_emit_by_name (manager, "device-added", device);
+-}
+-
+-static void
+-remove_device (GsdDeviceManager *manager,
+-	       GUdevDevice	*udev_device)
+-{
+-	GsdDeviceManagerPrivate *priv = gsd_device_manager_get_instance_private (manager);
+-	GsdDevice *device;
+-	const gchar *syspath;
++	while ((entry = readdir (dir)) != NULL) {
++		if (strncmp (entry->d_name, "event", 5) != 0)
++			continue;
+ 
+-	syspath = g_udev_device_get_sysfs_path (udev_device);
+-	device = g_hash_table_lookup (priv->devices, syspath);
++		device_path = g_strdup_printf ("/dev/input/%s", entry->d_name);
++		
++		/* Check if device is already tracked */
++		if (g_hash_table_lookup (priv->devices, device_path)) {
++			g_free (device_path);
++			continue;
++		}
+ 
+-	if (!device)
+-		return;
++		/* Check if device file is accessible */
++		if (access (device_path, R_OK) == 0) {
++			device = create_device_from_file (device_path);
++			g_hash_table_insert (priv->devices, g_strdup (device_path), device);
++			g_signal_emit_by_name (manager, "device-added", device);
++		}
+ 
+-	g_hash_table_steal (priv->devices, syspath);
+-	g_signal_emit_by_name (manager, "device-removed", device);
++		g_free (device_path);
++	}
+ 
+-	g_object_unref (device);
++	closedir (dir);
+ }
+ 
+-static void
+-udev_event_cb (GUdevClient	*client,
+-	       gchar		*action,
+-	       GUdevDevice	*device,
+-	       GsdDeviceManager *manager)
++static gboolean
++periodic_device_scan (gpointer user_data)
+ {
+-	if (!device_is_evdev (device))
+-		return;
+-
+-	if (g_strcmp0 (action, "add") == 0) {
+-		add_device (manager, device);
+-	} else if (g_strcmp0 (action, "remove") == 0) {
+-		remove_device (manager, device);
+-	}
++	GsdDeviceManager *manager = GSD_DEVICE_MANAGER (user_data);
++	scan_input_devices (manager);
++	return G_SOURCE_CONTINUE; /* Keep the timer running */
+ }
+ 
+ static void
+ gsd_device_manager_init (GsdDeviceManager *manager)
+ {
+         GsdDeviceManagerPrivate *priv = gsd_device_manager_get_instance_private (manager);
+-	const gchar *subsystems[] = { "input", NULL };
+-	g_autoptr(GList) devices = NULL;
+-	GList *l;
+ 
+ 	priv->devices = g_hash_table_new_full (g_str_hash, g_str_equal,
+ 					       (GDestroyNotify) g_free,
+ 					       (GDestroyNotify) g_object_unref);
+ 
+-	priv->udev_client = g_udev_client_new (subsystems);
+-	g_signal_connect (priv->udev_client, "uevent",
+-			  G_CALLBACK (udev_event_cb), manager);
+-
+-	devices = g_udev_client_query_by_subsystem (priv->udev_client,
+-						    subsystems[0]);
++	/* Initial device scan */
++	scan_input_devices (manager);
+ 
+-	for (l = devices; l; l = l->next) {
+-		g_autoptr(GUdevDevice) device = l->data;
+-
+-		if (device_is_evdev (device))
+-			add_device (manager, device);
+-	}
++	/* Set up periodic scanning for device changes (every 5 seconds) */
++	priv->scan_timer_id = g_timeout_add_seconds (5, periodic_device_scan, manager);
+ }
+ 
+ GsdDeviceManager *
+diff --git a/panels/common/meson.build b/panels/common/meson.build
+index 7314235..3928de9 100644
+--- a/panels/common/meson.build
++++ b/panels/common/meson.build
+@@ -93,8 +93,6 @@ gsd_sources = [
+ 
+ sources = common_sources + files(gsd_sources)
+ 
+-deps = common_deps + [ gudev_dep ]
+-
+ libdevice = static_library(
+   'device',
+   sources: sources,
+-- 
+2.48.1
+

@@ -1,0 +1,57 @@
+From 35283057b962e102adbd7781ad2cfcac5899e555 Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Fri, 25 Jul 2025 12:53:55 +0530
+Subject: [PATCH 13/18] remove polkit form datetime
+
+---
+ panels/system/datetime/cc-datetime-page.c | 12 ------------
+ panels/system/datetime/meson.build        | 10 ----------
+ 2 files changed, 22 deletions(-)
+
+diff --git a/panels/system/datetime/cc-datetime-page.c b/panels/system/datetime/cc-datetime-page.c
+index 0c51dc3..10fd537 100644
+--- a/panels/system/datetime/cc-datetime-page.c
++++ b/panels/system/datetime/cc-datetime-page.c
+@@ -870,18 +870,6 @@ cc_date_time_page_init (CcDateTimePage *self)
+   gtk_list_box_invalidate_sort (self->date_box);
+ 
+   /* add the lock button */
+-  self->permission = polkit_permission_new_sync (DATETIME_PERMISSION, NULL, NULL, NULL);
+-  self->tz_permission = polkit_permission_new_sync (DATETIME_TZ_PERMISSION, NULL, NULL, NULL);
+-  if (self->permission != NULL)
+-    {
+-      g_signal_connect_object (self->permission, "notify",
+-                               G_CALLBACK (on_permission_changed), self, G_CONNECT_SWAPPED);
+-    }
+-  else
+-    {
+-      g_warning ("Your system does not have the '%s' PolicyKit files installed. Please check your installation",
+-                 DATETIME_PERMISSION);
+-    }
+   cc_permission_infobar_set_permission (self->permission_infobar, self->permission);
+ 
+   self->location_settings = g_settings_new (LOCATION_SETTINGS);
+diff --git a/panels/system/datetime/meson.build b/panels/system/datetime/meson.build
+index cd94085..1456c9e 100644
+--- a/panels/system/datetime/meson.build
++++ b/panels/system/datetime/meson.build
+@@ -8,16 +8,6 @@ i18n.merge_file(
+   install_dir: control_center_desktopdir
+ )
+ 
+-polkit = 'org.gnome.controlcenter.@0@.policy'.format(cappletname)
+-
+-i18n.merge_file(
+-  input: polkit + '.in',
+-  output: polkit,
+-  po_dir: po_dir,
+-  install: true,
+-  install_dir: join_paths(control_center_datadir, 'polkit-1', 'actions')
+-)
+-
+ gdbus = 'timedated'
+ gdbus_iface_xml = gdbus + '1-interface.xml'
+ 
+-- 
+2.48.1
+

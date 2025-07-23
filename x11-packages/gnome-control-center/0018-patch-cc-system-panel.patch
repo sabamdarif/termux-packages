@@ -1,0 +1,91 @@
+From 46753053bb8c0c2f2765d66ea4d2a0e716c7de7d Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Fri, 25 Jul 2025 16:21:42 +0530
+Subject: [PATCH] patch cc-system-panel
+
+---
+ panels/system/cc-system-panel.c | 25 +------------------------
+ 1 file changed, 1 insertion(+), 24 deletions(-)
+
+diff --git a/panels/system/cc-system-panel.c b/panels/system/cc-system-panel.c
+index ba9efd7..ff94293 100644
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -28,23 +28,18 @@
+ #include "cc-system-resources.h"
+ #include "cc-systemd-service.h"
+ 
+-#include "about/cc-about-page.h"
+ #include "datetime/cc-datetime-page.h"
+ #include "region/cc-region-page.h"
+ #include "remote-desktop/cc-remote-desktop-page.h"
+-#include "secure-shell/cc-secure-shell-page.h"
+ 
+ struct _CcSystemPanel
+ {
+   CcPanel    parent_instance;
+ 
+-  AdwActionRow *about_row;
+   AdwActionRow *datetime_row;
+   AdwActionRow *region_row;
+   AdwActionRow *remote_desktop_row;
+-
+-  CcSecureShellPage *secure_shell_dialog;
+-  AdwNavigationPage *software_updates_group;
++  AdwNavigationPage *software_updates_group;  
+ };
+ 
+ CC_PANEL_REGISTER (CcSystemPanel, cc_system_panel)
+@@ -116,19 +111,6 @@ cc_system_page_open_software_update (CcSystemPanel *self)
+     g_warning ("Failed to spawn %s: %s", argv[0], error->message);
+ }
+ 
+-static void
+-on_secure_shell_row_clicked (CcSystemPanel *self)
+-{
+-  if (self->secure_shell_dialog == NULL)
+-    {
+-      self->secure_shell_dialog = g_object_new (CC_TYPE_SECURE_SHELL_PAGE, NULL);
+-      g_object_add_weak_pointer (G_OBJECT (self->secure_shell_dialog),
+-                                 (gpointer *) &self->secure_shell_dialog);
+-    }
+-
+-  adw_dialog_present (ADW_DIALOG (self->secure_shell_dialog), GTK_WIDGET (self));
+-}
+-
+ static void
+ cc_system_panel_class_init (CcSystemPanelClass *klass)
+ {
+@@ -136,21 +118,17 @@ cc_system_panel_class_init (CcSystemPanelClass *klass)
+ 
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/system/cc-system-panel.ui");
+ 
+-  gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, about_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, datetime_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, region_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, remote_desktop_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, software_updates_group);
+ 
+   gtk_widget_class_bind_template_callback (widget_class, cc_system_page_open_software_update);
+-  gtk_widget_class_bind_template_callback (widget_class, on_secure_shell_row_clicked);
+ 
+-  g_type_ensure (CC_TYPE_ABOUT_PAGE);
+   g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
+   g_type_ensure (CC_TYPE_LIST_ROW);
+   g_type_ensure (CC_TYPE_REGION_PAGE);
+   g_type_ensure (CC_TYPE_REMOTE_DESKTOP_PAGE);
+-  g_type_ensure (CC_TYPE_SECURE_SHELL_PAGE);
+ }
+ 
+ static void
+@@ -167,7 +145,6 @@ cc_system_panel_init (CcSystemPanel *self)
+                                                                  service_state == CC_SERVICE_STATE_DISABLED);
+   gtk_widget_set_visible (GTK_WIDGET (self->software_updates_group), show_software_updates_group (self));
+ 
+-  cc_panel_add_static_subpage (CC_PANEL (self), "about", CC_TYPE_ABOUT_PAGE);
+   cc_panel_add_static_subpage (CC_PANEL (self), "datetime", CC_TYPE_DATE_TIME_PAGE);
+   cc_panel_add_static_subpage (CC_PANEL (self), "region", CC_TYPE_REGION_PAGE);
+   cc_panel_add_static_subpage (CC_PANEL (self), "remote-desktop", CC_TYPE_REMOTE_DESKTOP_PAGE);
+-- 
+2.48.1
+

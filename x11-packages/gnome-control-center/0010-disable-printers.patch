@@ -1,0 +1,49 @@
+From c62ae542fad9ec88bad5d6531bbfe51ca8b99bcd Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Fri, 25 Jul 2025 12:53:13 +0530
+Subject: [PATCH 12/18] disable printers
+
+---
+ panels/meson.build      | 1 -
+ shell/cc-panel-loader.c | 4 ++++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/panels/meson.build b/panels/meson.build
+index 2495204..bb7653d 100644
+--- a/panels/meson.build
++++ b/panels/meson.build
+@@ -11,7 +11,6 @@ panels = [
+   'mouse',
+   'multitasking',
+   'notifications',
+-  'printers',
+   'privacy',
+   'search',
+   'sharing',
+diff --git a/shell/cc-panel-loader.c b/shell/cc-panel-loader.c
+index 7d5ad07..7893f0c 100644
+--- a/shell/cc-panel-loader.c
++++ b/shell/cc-panel-loader.c
+@@ -55,7 +55,9 @@ extern GType cc_online_accounts_panel_get_type (void);
+ #ifdef BUILD_POWER
+ extern GType cc_power_panel_get_type (void);
+ #endif /* BUILD_POWER */
++#ifdef BUILD_PRINTERS
+ extern GType cc_printers_panel_get_type (void);
++#endif /* BUILD_PRINTERS */
+ extern GType cc_privacy_panel_get_type (void);
+ extern GType cc_search_panel_get_type (void);
+ extern GType cc_sharing_panel_get_type (void);
+@@ -115,7 +117,9 @@ static CcPanelLoaderVtable default_panels[] =
+ #ifdef BUILD_POWER
+   PANEL_TYPE("power",            cc_power_panel_get_type,                NULL),
+ #endif
++#ifdef BUILD_PRINTERS
+   PANEL_TYPE("printers",         cc_printers_panel_get_type,             NULL),
++#endif
+   PANEL_TYPE("privacy",          cc_privacy_panel_get_type,              NULL),
+   PANEL_TYPE("search",           cc_search_panel_get_type,               NULL),
+   PANEL_TYPE("sharing",          cc_sharing_panel_get_type,              cc_sharing_panel_static_init_func),
+-- 
+2.48.1
+

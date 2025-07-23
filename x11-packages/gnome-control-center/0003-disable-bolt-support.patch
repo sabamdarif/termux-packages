@@ -1,0 +1,78 @@
+From 2f34dcaecb9b4aca95d30cf6db4c365800d7fd06 Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Wed, 23 Jul 2025 12:48:52 +0530
+Subject: [PATCH 4/6] disable bolt support
+
+---
+ panels/privacy/bolt/bolt-str.c |  1 +
+ panels/privacy/meson.build     | 32 +++++---------------------------
+ 2 files changed, 6 insertions(+), 27 deletions(-)
+
+diff --git a/panels/privacy/bolt/bolt-str.c b/panels/privacy/bolt/bolt-str.c
+index fe0580d..b8f632b 100644
+--- a/panels/privacy/bolt/bolt-str.c
++++ b/panels/privacy/bolt/bolt-str.c
+@@ -1,3 +1,4 @@
++#include <strings.h>
+ /*
+  * Copyright © 2017 Red Hat, Inc
+  *
+diff --git a/panels/privacy/meson.build b/panels/privacy/meson.build
+index 3afd326..269b7d2 100644
+--- a/panels/privacy/meson.build
++++ b/panels/privacy/meson.build
+@@ -1,6 +1,8 @@
++cappletname = 'privacy'
++
+ panels_list += cappletname
+-desktop = 'gnome-@0@-panel.desktop'.format(cappletname)
+ 
++desktop = 'gnome-@0@-panel.desktop'.format(cappletname)
+ i18n.merge_file(
+   type: 'desktop',
+   input: desktop + '.in',
+@@ -24,31 +26,7 @@ sources = files(
+   'usage/cc-usage-page.c',
+ )
+ 
+-if host_is_linux_not_s390
+-  sources += files(
+-    'bolt/bolt-client.c',
+-    'bolt/bolt-device.c',
+-    'bolt/bolt-enums.c',
+-    'bolt/bolt-error.c',
+-    'bolt/bolt-names.c',
+-    'bolt/bolt-proxy.c',
+-    'bolt/bolt-str.c',
+-    'bolt/bolt-time.c',
+-    'bolt/cc-bolt-device-dialog.c',
+-    'bolt/cc-bolt-device-entry.c',
+-    'bolt/cc-bolt-page.c',
+-  )
+-
+-  enum_headers = [
+-    'bolt/bolt-enums.h',
+-    'bolt/bolt-error.h'
+-  ]
+-
+-  sources += gnome.mkenums_simple(
+-    'bolt-enum-types',
+-    sources: enum_headers,
+-  )
+-endif
++# Bolt support disabled for Termux build 
+ 
+ sources += gnome.compile_resources(
+   'cc-' + cappletname + '-resources',
+@@ -73,7 +51,7 @@ deps = deps + [
+ panels_libs += static_library(
+   cappletname,
+   sources: sources,
+-  include_directories: [ top_inc, common_inc, 'bolt', 'screen', 'usage' ],
++  include_directories: [ top_inc, common_inc, 'screen', 'usage' ],
+   dependencies: deps,
+   c_args: cflags
+ )
+-- 
+2.48.1
+

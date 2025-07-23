@@ -1,0 +1,193 @@
+From ea0b8dfd08a80f1f9d69da5b565803a0f8cd532a Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Wed, 23 Jul 2025 19:37:50 +0530
+Subject: [PATCH] meson build patch
+
+---
+ meson.build       | 86 +++++++++++++++++++++++------------------------
+ meson_options.txt |  2 ++
+ 2 files changed, 45 insertions(+), 43 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index f547820..13a0627 100644
+--- a/meson.build
++++ b/meson.build
+@@ -112,6 +112,11 @@ if get_option('buildtype').contains('debug')
+   common_flags += cc.get_supported_arguments(test_cflags)
+ endif
+ 
++# Warnings which are not useful for our coding style, regardless of the build type
++common_flags += cc.get_supported_arguments([
++    '-Wno-unused-parameter',
++])
++
+ add_project_arguments(common_flags, language: 'c')
+ 
+ # Check that we meet the dependencies
+@@ -122,12 +127,12 @@ libgvc = subproject(
+     'alsa=false',
+     'package_name=' + control_center_gettext,
+     'package_version=' + meson.project_version(),
++    'werror=false',
+   ]
+ )
+ libgvc_dep = libgvc.get_variable('libgvc_dep')
+ 
+ libadwaita_version = '>= 1.7.alpha'
+-goa_req_version = '>= 3.51.0'
+ pulse_req_version = '>= 2.0'
+ 
+ gtk_dep = dependency(
+@@ -160,6 +165,7 @@ if libadwaita_is_subproject
+       'introspection=disabled',
+       'tests=false',
+       'vapi=false',
++      'werror=false',
+     ],
+   )
+ endif
+@@ -174,12 +180,18 @@ tecla_dep = dependency(
+ tecla_is_subproject = not tecla_dep.found()
+ if tecla_is_subproject
+   tecla = subproject(
+-    'tecla'
++    'tecla',
++    default_options: [
++      'werror=false',
++    ],
+   )
+ endif
+ 
+ subproject('libgxdp',
+-  default_options: 'tests=false',
++  default_options: [
++    'tests=false',
++    'werror=false',
++  ],
+ )
+ 
+ accounts_dep = dependency('accountsservice', version: '>= 23.11.69')
+@@ -190,15 +202,11 @@ gnome_desktop_dep = dependency('gnome-desktop-4')
+ gnome_bg_dep = dependency('gnome-bg-4')
+ gnome_rr_dep = dependency('gnome-rr-4')
+ gnome_settings_dep = dependency('gnome-settings-daemon', version: '>= 48.rc', fallback: 'gsd')
+-goa_dep = dependency('goa-1.0', version: goa_req_version, fallback: 'goa')
+ gsettings_desktop_dep = dependency('gsettings-desktop-schemas', version: '>= 48.alpha')  # actually requires commit 9d55553, just after alpha
+ libxml_dep = dependency('libxml-2.0')
+ pulse_dep = dependency('libpulse', version: pulse_req_version)
+ pulse_mainloop_dep = dependency('libpulse-mainloop-glib', version: pulse_req_version)
+ upower_glib_dep = dependency('upower-glib', version: '>= 1.90.6')
+-gudev_dep = dependency('gudev-1.0', version: '>= 232')
+-x11_dep = dependency('x11', version: '>= 1.8')
+-xi_dep = dependency('xi', version: '>= 1.2')
+ epoxy_dep = dependency('epoxy')
+ gcr_dep = dependency('gcr-4', version: '>= 4.1.0')
+ pwquality_dep = dependency('pwquality', version: '>= 1.2.2')
+@@ -254,6 +262,14 @@ config_h.set10('HAVE_CUPS_HTTPCONNECT2',
+                cc.has_function('httpConnect2', dependencies: cups_dep),
+                description: 'Define if httpConnect2() is available in CUPS')
+ 
++# X11
++have_x11_support = get_option('x11')
++if have_x11_support
++  x11_dep = dependency('x11', version: '>= 1.8')
++  xi_dep = dependency('xi', version: '>= 1.2')
++endif
++config_h.set('HAVE_X11', have_x11_support, description: 'Defined if X11 support is enabled')
++
+ # IBus support
+ enable_ibus = get_option('ibus')
+ if enable_ibus
+@@ -293,49 +309,32 @@ config_h.set('HAVE_LOCATION_SERVICES', location_services.enabled(),
+ # Snap support and wellbeing panel
+ json_glib_dep = dependency('json-glib-1.0')
+ 
+-if host_is_linux
+-  # ModemManager
+-  mm_dep =  dependency('mm-glib', version: '>= 0.7')
+-  # NetworkManager
+-  network_manager_deps = [
+-    dependency('libnm', version: '>= 1.24.0'),
+-    dependency('libnma-gtk4', version: '>= 1.10.2'),
+-    mm_dep,
+-  ]
+-endif
+-config_h.set('BUILD_NETWORK', host_is_linux,
++# DISABLED: Network and Bluetooth support removed
++# Network Manager and ModemManager dependencies removed
++# GNOME Bluetooth dependencies removed
++# Wacom dependencies removed (requires libwacom which is bluetooth-related)
++
++# Force disable network, bluetooth, wacom, and thunderbolt panels
++config_h.set('BUILD_NETWORK', false,
+              description: 'Define to 1 to build the Network panel')
+-config_h.set('HAVE_NETWORK_MANAGER', host_is_linux,
++config_h.set('HAVE_NETWORK_MANAGER', false,
+              description: 'Define to 1 if NetworkManager is available')
+-config_h.set('BUILD_WWAN', host_is_linux,
++config_h.set('BUILD_WWAN', false,
+              description: 'Define to 1 to build the WWan panel')
+-config_h.set('HAVE_WWAN', host_is_linux,
++config_h.set('HAVE_WWAN', false,
+              description: 'Define to 1 if WWan is available')
+-
+-if host_is_linux_not_s390
+-  # gnome-bluetooth
+-  gnome_bluetooth_dep = dependency('gnome-bluetooth-ui-3.0')
+-
+-  libwacom_dep = dependency('libwacom', version: '>= 1.4')
+-
+-  wacom_deps = [
+-    libwacom_dep,
+-  ]
+-else
+-  message('Bluetooth and Wacom panels will not be built (no USB support on this platform)')
+-  message('Thunderbolt panel will not be built (not supported on this platform)')
+-endif
+-config_h.set('BUILD_BLUETOOTH', host_is_linux_not_s390,
++config_h.set('BUILD_BLUETOOTH', false,
+              description: 'Define to 1 to build the Bluetooth panel')
+-config_h.set('HAVE_BLUETOOTH', host_is_linux_not_s390,
++config_h.set('HAVE_BLUETOOTH', false,
+              description: 'Define to 1 if bluetooth support is available')
+-config_h.set('BUILD_WACOM', host_is_linux_not_s390,
++config_h.set('BUILD_WACOM', false,
+              description: 'Define to 1 to build the Wacom panel')
+-config_h.set('HAVE_WACOM', host_is_linux_not_s390,
++config_h.set('HAVE_WACOM', false,
+              description: 'Define to 1 if Wacom is supportted')
+-config_h.set('BUILD_THUNDERBOLT', host_is_linux_not_s390,
++config_h.set('BUILD_THUNDERBOLT', false,
+              description: 'Define to 1 to build the Thunderbolt panel')
+ 
++fs = import('fs')
+ gnome = import('gnome')
+ i18n = import('i18n')
+ pkg = import('pkgconfig')
+@@ -385,9 +384,10 @@ summary({
+ )
+ 
+ summary({
+-    'GNOME Bluetooth': host_is_linux_not_s390,
+-    'NetworkManager': host_is_linux,
+-    'Wacom': host_is_linux_not_s390,
++    'GNOME Bluetooth': false,
++    'NetworkManager': false,
++    'Wacom': false,
++    'X11 xupport': have_x11_support,
+   },
+   section: 'Dependencies',
+   bool_yn: true,
+diff --git a/meson_options.txt b/meson_options.txt
+index b2302bf..bc57333 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -10,3 +10,5 @@ option('profile', type: 'combo', choices: ['default','development'], value: 'def
+ option('malcontent', type: 'boolean', value: false, description: 'build with malcontent support')
+ option('distributor_logo', type: 'string', description: 'absolute path to distributor logo for the About panel')
+ option('dark_mode_distributor_logo', type: 'string', description: 'absolute path to distributor logo dark mode variant')
++option('x11', type: 'boolean', value: true, description: 'Enable X11 support')
++
+-- 
+2.48.1
+

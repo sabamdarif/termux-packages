@@ -1,0 +1,50 @@
+From f6f257fdb1a48bf781d9e27bf92b149d84178302 Mon Sep 17 00:00:00 2001
+From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
+Date: Wed, 23 Jul 2025 19:44:37 +0530
+Subject: [PATCH] remove colord dependency
+
+---
+ meson.build                | 1 -
+ panels/color/meson.build   | 1 -
+ panels/display/meson.build | 1 -
+ 3 files changed, 3 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 9ca31e6..13a0627 100644
+--- a/meson.build
++++ b/meson.build
+@@ -195,7 +195,6 @@ subproject('libgxdp',
+ )
+ 
+ accounts_dep = dependency('accountsservice', version: '>= 23.11.69')
+-colord_dep = dependency('colord', version: '>= 0.1.34')
+ gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0', version: '>= 2.23.0')
+ gio_dep = dependency('gio-2.0')
+ glib_dep = dependency('glib-2.0', version: '>= 2.76.6')
+diff --git a/panels/color/meson.build b/panels/color/meson.build
+index 52198ec..0e8db64 100644
+--- a/panels/color/meson.build
++++ b/panels/color/meson.build
+@@ -27,7 +27,6 @@ sources += gnome.compile_resources(
+ )
+ 
+ deps = common_deps + [
+-  colord_dep,
+   gnome_rr_dep,
+   m_dep,
+   dependency('colord-gtk4', version: '>= 0.1.24'),
+diff --git a/panels/display/meson.build b/panels/display/meson.build
+index c3dd032..3b46cc0 100644
+--- a/panels/display/meson.build
++++ b/panels/display/meson.build
+@@ -30,7 +30,6 @@ sources += gnome.compile_resources(
+ )
+ 
+ deps = common_deps + [
+-  colord_dep,
+   gnome_rr_dep,
+   m_dep,
+   upower_glib_dep
+-- 
+2.48.1
+
