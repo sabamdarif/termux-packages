@@ -252,8 +252,10 @@ jobs:
 
         if [[ "${#packages[@]}" -gt 0 ]]; then
           if [ "$DOCKER_BUILD" == 'false' ]; then
+            ./scripts/setup-ubuntu.sh
             ./build-package.sh -I -C -a "${{ matrix.target_arch }}" "${packages[@]}"
           else
+            ./scripts/run-docker.sh ./scripts/setup-ubuntu.sh
             ./scripts/run-docker.sh ./build-package.sh -I -C -a "${{ matrix.target_arch }}" "${packages[@]}"
           fi
         fi
