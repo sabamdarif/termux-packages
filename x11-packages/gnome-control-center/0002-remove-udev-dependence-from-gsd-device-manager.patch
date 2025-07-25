@@ -1,13 +1,3 @@
-From c9f96b309a041c84f0040555f672dc66b41758a7 Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Wed, 23 Jul 2025 12:46:56 +0530
-Subject: [PATCH 3/6] remove udev dependence from gsd device manager
-
----
- panels/common/gsd-device-manager.c | 216 ++++++++++++++---------------
- panels/common/meson.build          |   2 -
- 2 files changed, 107 insertions(+), 111 deletions(-)
-
 diff --git a/panels/common/gsd-device-manager.c b/panels/common/gsd-device-manager.c
 index 5a5002e..4cbdb61 100644
 --- a/panels/common/gsd-device-manager.c
@@ -321,6 +311,3 @@ index 7314235..3928de9 100644
  libdevice = static_library(
    'device',
    sources: sources,
--- 
-2.48.1
-

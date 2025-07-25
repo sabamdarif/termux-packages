@@ -1,12 +1,3 @@
-From a0c2f43f30739372e7fbd124fe01328f30a7d336 Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Fri, 25 Jul 2025 10:38:49 +0530
-Subject: [PATCH] do not relay on pwquality for remote-desktop
-
----
- .../remote-desktop/cc-desktop-sharing-page.c  | 20 +++++++++++++++----
- 1 file changed, 16 insertions(+), 4 deletions(-)
-
 diff --git a/panels/system/remote-desktop/cc-desktop-sharing-page.c b/panels/system/remote-desktop/cc-desktop-sharing-page.c
 index 58178d8..9d53d9e 100644
 --- a/panels/system/remote-desktop/cc-desktop-sharing-page.c
@@ -46,6 +37,3 @@ index 58178d8..9d53d9e 100644
      }
    gtk_editable_set_text (GTK_EDITABLE (self->username_entry), username);
  
--- 
-2.48.1
-

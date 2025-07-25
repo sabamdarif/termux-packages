@@ -1,15 +1,5 @@
-From ea0b8dfd08a80f1f9d69da5b565803a0f8cd532a Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Wed, 23 Jul 2025 19:37:50 +0530
-Subject: [PATCH] meson build patch
-
----
- meson.build       | 86 +++++++++++++++++++++++------------------------
- meson_options.txt |  2 ++
- 2 files changed, 45 insertions(+), 43 deletions(-)
-
 diff --git a/meson.build b/meson.build
-index f547820..13a0627 100644
+index 64d372b..9ca31e6 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -112,6 +112,11 @@ if get_option('buildtype').contains('debug')
@@ -67,7 +57,7 @@ index f547820..13a0627 100644
  )
  
  accounts_dep = dependency('accountsservice', version: '>= 23.11.69')
-@@ -190,15 +202,11 @@ gnome_desktop_dep = dependency('gnome-desktop-4')
+@@ -191,15 +203,11 @@ gnome_desktop_dep = dependency('gnome-desktop-4')
  gnome_bg_dep = dependency('gnome-bg-4')
  gnome_rr_dep = dependency('gnome-rr-4')
  gnome_settings_dep = dependency('gnome-settings-daemon', version: '>= 48.rc', fallback: 'gsd')
@@ -83,7 +73,7 @@ index f547820..13a0627 100644
  epoxy_dep = dependency('epoxy')
  gcr_dep = dependency('gcr-4', version: '>= 4.1.0')
  pwquality_dep = dependency('pwquality', version: '>= 1.2.2')
-@@ -254,6 +262,14 @@ config_h.set10('HAVE_CUPS_HTTPCONNECT2',
+@@ -255,6 +263,14 @@ config_h.set10('HAVE_CUPS_HTTPCONNECT2',
                 cc.has_function('httpConnect2', dependencies: cups_dep),
                 description: 'Define if httpConnect2() is available in CUPS')
  
@@ -98,7 +88,7 @@ index f547820..13a0627 100644
  # IBus support
  enable_ibus = get_option('ibus')
  if enable_ibus
-@@ -293,49 +309,32 @@ config_h.set('HAVE_LOCATION_SERVICES', location_services.enabled(),
+@@ -294,49 +310,32 @@ config_h.set('HAVE_LOCATION_SERVICES', location_services.enabled(),
  # Snap support and wellbeing panel
  json_glib_dep = dependency('json-glib-1.0')
  
@@ -164,7 +154,7 @@ index f547820..13a0627 100644
  gnome = import('gnome')
  i18n = import('i18n')
  pkg = import('pkgconfig')
-@@ -385,9 +384,10 @@ summary({
+@@ -386,9 +385,10 @@ summary({
  )
  
  summary({
@@ -188,6 +178,3 @@ index b2302bf..bc57333 100644
  option('dark_mode_distributor_logo', type: 'string', description: 'absolute path to distributor logo dark mode variant')
 +option('x11', type: 'boolean', value: true, description: 'Enable X11 support')
 +
--- 
-2.48.1
-

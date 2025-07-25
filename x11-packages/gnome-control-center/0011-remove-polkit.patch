@@ -1,0 +1,369 @@
+diff --git a/meson.build b/meson.build
+index c117727..e157798 100644
+--- a/meson.build
++++ b/meson.build
+@@ -222,15 +222,6 @@ common_deps = [
+   gtk_dep,
+ ]
+ 
+-polkit_gobject_dep = dependency('polkit-gobject-1', version: '>= 0.103')
+-# Also verify that polkit ITS files exist:
+-# https://gitlab.gnome.org/GNOME/gnome-control-center/-/issues/491
+-polkit_files = [ 'gettext/its/polkit.its', 'gettext/its/polkit.loc' ]
+-foreach polkit_file: polkit_files
+-  r = run_command('build-aux/meson/find_xdg_file.py', polkit_file, check: true)
+-  assert(r.returncode() == 0, 'ITS support missing from polkit, please upgrade or contact your distribution')
+-endforeach
+-
+ # Localisation API
+ if cc.has_header_symbol('langinfo.h', '_NL_TIME_FIRST_WEEKDAY')
+   config_h.set('HAVE__NL_TIME_FIRST_WEEKDAY', 1,
+diff --git a/panels/common/cc-hostname-entry.c b/panels/common/cc-hostname-entry.c
+index 29e3b98..23a9c3f 100644
+--- a/panels/common/cc-hostname-entry.c
++++ b/panels/common/cc-hostname-entry.c
+@@ -24,8 +24,6 @@
+ #include "cc-hostname-entry.h"
+ #include "hostname-helper.h"
+ 
+-#include <polkit/polkit.h>
+-
+ struct _CcHostnameEntry
+ {
+   AdwEntryRow          parent;
+@@ -83,41 +81,21 @@ cc_hostname_entry_dispose (GObject *object)
+ static void
+ cc_hostname_entry_constructed (GObject *object)
+ {
+-  CcHostnameEntry *self = CC_HOSTNAME_ENTRY (object);
+-  GPermission *permission;
+-  g_autoptr(GError) error = NULL;
+-  g_autofree gchar *str = NULL;
+-
+-  permission = polkit_permission_new_sync ("org.freedesktop.hostname1.set-static-hostname",
+-                                           NULL, NULL, NULL);
+-
+-  /* Is hostnamed installed? */
+-  if (permission == NULL)
+-    {
+-      g_debug ("Will not show hostname, hostnamed not installed");
++    CcHostnameEntry *self = CC_HOSTNAME_ENTRY(object);
++    g_autofree gchar *str = NULL;
+ 
+-      gtk_widget_set_sensitive (GTK_WIDGET (self), FALSE);
++      gtk_widget_set_sensitive(GTK_WIDGET(self), TRUE);
+ 
+-      return;
++    str = cc_hostname_get_display_hostname(cc_hostname_get_default());
++    if (str != NULL) {
++        gtk_editable_set_text(GTK_EDITABLE(self), str);
++    } else {
++        gtk_editable_set_text(GTK_EDITABLE(self), "");
+     }
+ 
+-  if (g_permission_get_allowed (permission))
+-    gtk_widget_set_sensitive (GTK_WIDGET (self), TRUE);
+-  else
+-    {
+-      g_debug ("Not allowed to change the hostname");
+-      gtk_widget_set_sensitive (GTK_WIDGET (self), FALSE);
+-    }
+-
+-  str = cc_hostname_get_display_hostname (cc_hostname_get_default ());
+-  if (str != NULL)
+-    gtk_editable_set_text (GTK_EDITABLE (self), str);
+-  else
+-    gtk_editable_set_text (GTK_EDITABLE (self), "");
+-
+-  g_signal_connect (self, "apply", G_CALLBACK (text_changed_cb), NULL);
++    g_signal_connect(self, "apply", G_CALLBACK(text_changed_cb), NULL);
+ 
+-  adw_entry_row_set_show_apply_button (ADW_ENTRY_ROW (self), TRUE);
++  adw_entry_row_set_show_apply_button(ADW_ENTRY_ROW(self), TRUE);
+ }
+ 
+ static void
+diff --git a/panels/common/meson.build b/panels/common/meson.build
+index 3928de9..f725558 100644
+--- a/panels/common/meson.build
++++ b/panels/common/meson.build
+@@ -33,7 +33,7 @@ libwidgets = static_library(
+   'widgets',
+   sources: sources,
+   include_directories: top_inc,
+-  dependencies: common_deps + [ generates_sources_dep, polkit_gobject_dep ]
++  dependencies: common_deps + [ generates_sources_dep ]
+ )
+ libwidgets_dep = declare_dependency(
+   include_directories: common_inc,
+@@ -105,11 +105,3 @@ libdevice_dep = declare_dependency(
+   link_with: libdevice
+ )
+ 
+-polkit_conf = configuration_data()
+-polkit_conf.set('PRIVILEGED_GROUP', get_option('privileged_group'))
+-configure_file(
+-  input: 'gnome-control-center.rules.in',
+-  output: 'gnome-control-center.rules',
+-  configuration: polkit_conf,
+-  install_dir: join_paths(control_center_datadir, 'polkit-1', 'rules.d')
+-)
+diff --git a/panels/privacy/meson.build b/panels/privacy/meson.build
+index 269b7d2..7809fb4 100644
+--- a/panels/privacy/meson.build
++++ b/panels/privacy/meson.build
+@@ -44,7 +44,6 @@ deps = common_deps + [
+ ]
+ 
+ deps = deps + [
+-  polkit_gobject_dep,
+   m_dep,
+ ]
+ 
+diff --git a/panels/sharing/meson.build b/panels/sharing/meson.build
+index bab2588..cc7ba33 100644
+--- a/panels/sharing/meson.build
++++ b/panels/sharing/meson.build
+@@ -45,7 +45,6 @@ panels_libs += static_library(
+   include_directories: [ top_inc, common_inc ],
+   dependencies: [
+     common_deps,
+-    polkit_gobject_dep,
+   ],
+   c_args: cflags
+ )
+diff --git a/panels/system/datetime/cc-datetime-page.c b/panels/system/datetime/cc-datetime-page.c
+index 0c51dc3..2900966 100644
+--- a/panels/system/datetime/cc-datetime-page.c
++++ b/panels/system/datetime/cc-datetime-page.c
+@@ -42,7 +42,6 @@
+ #include <glib/gi18n.h>
+ #include <libgnome-desktop/gnome-languages.h>
+ #include <libgnome-desktop/gnome-wall-clock.h>
+-#include <polkit/polkit.h>
+ 
+ /* FIXME: This should be "Etc/GMT" instead */
+ #define DEFAULT_TZ "Europe/London"
+@@ -870,18 +869,6 @@ cc_date_time_page_init (CcDateTimePage *self)
+   gtk_list_box_invalidate_sort (self->date_box);
+ 
+   /* add the lock button */
+-  self->permission = polkit_permission_new_sync (DATETIME_PERMISSION, NULL, NULL, NULL);
+-  self->tz_permission = polkit_permission_new_sync (DATETIME_TZ_PERMISSION, NULL, NULL, NULL);
+-  if (self->permission != NULL)
+-    {
+-      g_signal_connect_object (self->permission, "notify",
+-                               G_CALLBACK (on_permission_changed), self, G_CONNECT_SWAPPED);
+-    }
+-  else
+-    {
+-      g_warning ("Your system does not have the '%s' PolicyKit files installed. Please check your installation",
+-                 DATETIME_PERMISSION);
+-    }
+   cc_permission_infobar_set_permission (self->permission_infobar, self->permission);
+ 
+   self->location_settings = g_settings_new (LOCATION_SETTINGS);
+diff --git a/panels/system/datetime/meson.build b/panels/system/datetime/meson.build
+index cd94085..1456c9e 100644
+--- a/panels/system/datetime/meson.build
++++ b/panels/system/datetime/meson.build
+@@ -8,16 +8,6 @@ i18n.merge_file(
+   install_dir: control_center_desktopdir
+ )
+ 
+-polkit = 'org.gnome.controlcenter.@0@.policy'.format(cappletname)
+-
+-i18n.merge_file(
+-  input: polkit + '.in',
+-  output: polkit,
+-  po_dir: po_dir,
+-  install: true,
+-  install_dir: join_paths(control_center_datadir, 'polkit-1', 'actions')
+-)
+-
+ gdbus = 'timedated'
+ gdbus_iface_xml = gdbus + '1-interface.xml'
+ 
+diff --git a/panels/system/meson.build b/panels/system/meson.build
+index 3040958..91811aa 100644
+--- a/panels/system/meson.build
++++ b/panels/system/meson.build
+@@ -73,7 +73,6 @@ deps = common_deps + [
+   liblanguage_dep,
+   libsecret_dep,
+   krb_dep,
+-  polkit_gobject_dep,
+ ]
+ 
+ if enable_ibus
+diff --git a/panels/system/region/cc-region-page.c b/panels/system/region/cc-region-page.c
+index d723018..2a1033d 100644
+--- a/panels/system/region/cc-region-page.c
++++ b/panels/system/region/cc-region-page.c
+@@ -46,7 +46,6 @@
+ #include <libgnome-desktop/gnome-xkb-info.h>
+ 
+ #include <locale.h>
+-#include <polkit/polkit.h>
+ 
+ #define GNOME_SYSTEM_LOCALE_DIR "org.gnome.system.locale"
+ #define KEY_REGION "region"
+@@ -694,42 +693,40 @@ localed_proxy_ready (GObject      *source,
+ }
+ 
+ static void
+-setup_login_permission (CcRegionPage *self)
++setup_login_permission(CcRegionPage *self)
+ {
+-        g_autoptr(GDBusConnection) bus = NULL;
+-        g_autoptr(GError) error = NULL;
+-        gboolean can_acquire;
+-        gboolean loaded;
++    g_autoptr(GDBusConnection) bus = NULL;
++    g_autoptr(GError) error = NULL;
++    gboolean loaded;
+ 
+-        self->permission = polkit_permission_new_sync ("org.freedesktop.locale1.set-locale", NULL, NULL, &error);
+-        if (self->permission == NULL) {
+-                g_warning ("Could not get 'org.freedesktop.locale1.set-locale' permission: %s",
+-                           error->message);
+-                return;
+-        }
++    self->permission = NULL;
+ 
+-        bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, NULL);
+-        g_dbus_proxy_new (bus,
+-                          G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES,
+-                          NULL,
+-                          "org.freedesktop.locale1",
+-                          "/org/freedesktop/locale1",
+-                          "org.freedesktop.locale1",
+-                          self->cancellable,
+-                          (GAsyncReadyCallback) localed_proxy_ready,
+-                          self);
++    bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
++    if (error != NULL) {
++        g_warning("Could not get D-Bus connection: %s", error->message);
++        g_clear_error(&error);
++        return;
++    }
+ 
+-        g_object_get (self->user_manager, "is-loaded", &loaded, NULL);
+-        if (loaded)
+-                set_login_button_visibility (self);
+-        else
+-                g_signal_connect_object (self->user_manager, "notify::is-loaded",
+-                                         G_CALLBACK (set_login_button_visibility), self, G_CONNECT_SWAPPED);
++    g_dbus_proxy_new(bus,
++                      G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES,
++                      NULL,
++                      "org.freedesktop.locale1",
++                      "/org/freedesktop/locale1",
++                      "org.freedesktop.locale1",
++                      self->cancellable,
++                      (GAsyncReadyCallback)localed_proxy_ready,
++                      self);
++
++    g_object_get(self->user_manager, "is-loaded", &loaded, NULL);
++    if (loaded) {
++        set_login_button_visibility(self);
++    } else {
++        g_signal_connect_object(self->user_manager, "notify::is-loaded",
++                                 G_CALLBACK(set_login_button_visibility), self, G_CONNECT_SWAPPED);
++    }
+ 
+-        can_acquire = self->permission &&
+-                (g_permission_get_allowed (self->permission) ||
+-                 g_permission_get_can_acquire (self->permission));
+-        gtk_widget_set_sensitive (self->login_group, can_acquire);
++    gtk_widget_set_sensitive(self->login_group, TRUE);
+ }
+ 
+ static void
+diff --git a/panels/system/remote-desktop/cc-remote-login-page.c b/panels/system/remote-desktop/cc-remote-login-page.c
+index 0e9ba99..fc6b114 100644
+--- a/panels/system/remote-desktop/cc-remote-login-page.c
++++ b/panels/system/remote-desktop/cc-remote-login-page.c
+@@ -22,7 +22,6 @@
+ 
+ #include <glib/gi18n.h>
+ #include <glib/gstdio.h>
+-#include <polkit/polkit.h>
+ #include <fcntl.h>
+ #include <stdio.h>
+ 
+@@ -706,23 +705,10 @@ cc_remote_login_page_init (CcRemoteLoginPage *self)
+                            G_CALLBACK (on_remote_login_active_changed), self,
+                            G_CONNECT_SWAPPED);
+ 
+-  self->permission = (GPermission*) polkit_permission_new_sync (REMOTE_LOGIN_PERMISSION, NULL, self->cancellable, &error);
+ 
+-  if (error != NULL)
+-    {
+-      g_warning ("Cannot create '%s' permission: %s", REMOTE_LOGIN_PERMISSION, error->message);
+-      g_clear_error (&error);
+-    }
+-
+-  sync_permissions (self);
+-  g_signal_connect_swapped (self->permission, "notify::allowed",
+-                            G_CALLBACK (sync_permissions),
+-                            self);
+-
+-  g_object_bind_property (self->password_entry, "sensitive",
+-                          self->generate_password_button_row, "sensitive",
+-                          G_BINDING_SYNC_CREATE);
+-  cc_permission_infobar_set_permission (self->permission_infobar, self->permission);
+-
+-  connect_to_remote_desktop_configuration_rdp_server (self);
++  self->permission = NULL;
++  g_object_bind_property(self->password_entry, "sensitive",
++                         self->generate_password_button_row, "sensitive",
++                         G_BINDING_SYNC_CREATE);
++  connect_to_remote_desktop_configuration_rdp_server(self);
+ }
+diff --git a/panels/system/remote-desktop/meson.build b/panels/system/remote-desktop/meson.build
+index 16dfc40..30afebd 100644
+--- a/panels/system/remote-desktop/meson.build
++++ b/panels/system/remote-desktop/meson.build
+@@ -5,21 +5,3 @@ sources += gnome.gdbus_codegen(
+   interface_prefix: 'org.gnome.',
+   namespace: 'Gsd'
+ )
+-
+-polkit_conf = configuration_data()
+-polkit_conf.set('libexecdir', control_center_libexecdir)
+-polkit = 'org.gnome.controlcenter.remote-session-helper.policy'
+-
+-polkit_in = configure_file(
+-  input: polkit + '.in.in',
+-  output: polkit + '.in',
+-  configuration: polkit_conf
+-)
+-
+-i18n.merge_file(
+-  input: polkit_in,
+-  output: polkit,
+-  po_dir: po_dir,
+-  install: true,
+-  install_dir: join_paths(control_center_datadir, 'polkit-1', 'actions')
+-)
+diff --git a/panels/system/users/meson.build b/panels/system/users/meson.build
+index 5fda2ed..e7173fa 100644
+--- a/panels/system/users/meson.build
++++ b/panels/system/users/meson.build
+@@ -33,15 +33,6 @@ install_data(
+   install_dir: image_dir
+ )
+ 
+-polkit = 'org.gnome.controlcenter.user-accounts.policy'
+-i18n.merge_file(
+-  input: polkit + '.in',
+-  output: polkit,
+-  po_dir: po_dir,
+-  install: true,
+-  install_dir: join_paths(control_center_datadir, 'polkit-1', 'actions')
+-)
+-
+ realmd_namespace = 'org.freedesktop.realmd'
+ sources += gnome.gdbus_codegen(
+   'cc-realm-generated',

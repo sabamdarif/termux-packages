@@ -1,13 +1,3 @@
-From 2f34dcaecb9b4aca95d30cf6db4c365800d7fd06 Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Wed, 23 Jul 2025 12:48:52 +0530
-Subject: [PATCH 4/6] disable bolt support
-
----
- panels/privacy/bolt/bolt-str.c |  1 +
- panels/privacy/meson.build     | 32 +++++---------------------------
- 2 files changed, 6 insertions(+), 27 deletions(-)
-
 diff --git a/panels/privacy/bolt/bolt-str.c b/panels/privacy/bolt/bolt-str.c
 index fe0580d..b8f632b 100644
 --- a/panels/privacy/bolt/bolt-str.c
@@ -73,6 +63,3 @@ index 3afd326..269b7d2 100644
    dependencies: deps,
    c_args: cflags
  )
--- 
-2.48.1
-

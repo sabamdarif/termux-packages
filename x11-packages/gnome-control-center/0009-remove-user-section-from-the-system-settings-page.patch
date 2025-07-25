@@ -1,15 +1,3 @@
-From 9339cff82284d6778b5f225349fa339e60d354f6 Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Thu, 24 Jul 2025 14:40:06 +0530
-Subject: [PATCH] remove user section from the system settings page
-
----
- meson.build                      |  1 -
- panels/system/cc-system-panel.c  |  5 -----
- panels/system/cc-system-panel.ui | 13 +------------
- panels/system/meson.build        | 24 ------------------------
- 4 files changed, 1 insertion(+), 42 deletions(-)
-
 diff --git a/meson.build b/meson.build
 index 13a0627..c117727 100644
 --- a/meson.build
@@ -144,6 +132,3 @@ index 8ed6265..3040958 100644
  
  panels_libs += static_library(
    cappletname,
--- 
-2.48.1
-

@@ -1,0 +1,97 @@
+diff --git a/panels/system/cc-system-panel.c b/panels/system/cc-system-panel.c
+index ba9efd7..c11df3b 100644
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -32,7 +32,6 @@
+ #include "datetime/cc-datetime-page.h"
+ #include "region/cc-region-page.h"
+ #include "remote-desktop/cc-remote-desktop-page.h"
+-#include "secure-shell/cc-secure-shell-page.h"
+ 
+ struct _CcSystemPanel
+ {
+@@ -43,7 +42,6 @@ struct _CcSystemPanel
+   AdwActionRow *region_row;
+   AdwActionRow *remote_desktop_row;
+ 
+-  CcSecureShellPage *secure_shell_dialog;
+   AdwNavigationPage *software_updates_group;
+ };
+ 
+@@ -116,19 +114,6 @@ cc_system_page_open_software_update (CcSystemPanel *self)
+     g_warning ("Failed to spawn %s: %s", argv[0], error->message);
+ }
+ 
+-static void
+-on_secure_shell_row_clicked (CcSystemPanel *self)
+-{
+-  if (self->secure_shell_dialog == NULL)
+-    {
+-      self->secure_shell_dialog = g_object_new (CC_TYPE_SECURE_SHELL_PAGE, NULL);
+-      g_object_add_weak_pointer (G_OBJECT (self->secure_shell_dialog),
+-                                 (gpointer *) &self->secure_shell_dialog);
+-    }
+-
+-  adw_dialog_present (ADW_DIALOG (self->secure_shell_dialog), GTK_WIDGET (self));
+-}
+-
+ static void
+ cc_system_panel_class_init (CcSystemPanelClass *klass)
+ {
+@@ -143,14 +128,12 @@ cc_system_panel_class_init (CcSystemPanelClass *klass)
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, software_updates_group);
+ 
+   gtk_widget_class_bind_template_callback (widget_class, cc_system_page_open_software_update);
+-  gtk_widget_class_bind_template_callback (widget_class, on_secure_shell_row_clicked);
+ 
+   g_type_ensure (CC_TYPE_ABOUT_PAGE);
+   g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
+   g_type_ensure (CC_TYPE_LIST_ROW);
+   g_type_ensure (CC_TYPE_REGION_PAGE);
+   g_type_ensure (CC_TYPE_REMOTE_DESKTOP_PAGE);
+-  g_type_ensure (CC_TYPE_SECURE_SHELL_PAGE);
+ }
+ 
+ static void
+diff --git a/panels/system/cc-system-panel.ui b/panels/system/cc-system-panel.ui
+index 84bf9c6..da67c98 100644
+--- a/panels/system/cc-system-panel.ui
++++ b/panels/system/cc-system-panel.ui
+@@ -49,16 +49,6 @@
+                       </object>
+                     </child>
+ 
+-                    <child>
+-                      <object class="CcListRow">
+-                        <property name="title" translatable="yes">Se_cure Shell</property>
+-                        <property name="subtitle" translatable="yes">SSH network access</property>
+-                        <property name="icon-name">utilities-terminal-symbolic</property>
+-                        <property name="show-arrow">True</property>
+-                        <signal name="activated" handler="on_secure_shell_row_clicked" object="CcSystemPanel" swapped="yes"/>
+-                      </object>
+-                    </child>
+-
+                     <child>
+                       <object class="CcListRow" id="about_row">
+                         <property name="title" translatable="yes">_About</property>
+diff --git a/panels/system/meson.build b/panels/system/meson.build
+index 91811aa..11cb9ac 100644
+--- a/panels/system/meson.build
++++ b/panels/system/meson.build
+@@ -33,8 +33,6 @@ sources = files(
+   'remote-desktop/cc-remote-desktop-page.c',
+   'remote-desktop/cc-remote-login-page.c',
+   'remote-desktop/cc-tls-certificate.c',
+-  'secure-shell/cc-secure-shell.c',
+-  'secure-shell/cc-secure-shell-page.c',
+ )
+ 
+ sources += gnome.compile_resources(
+@@ -105,7 +103,6 @@ subdir('datetime')
+ subdir('icons')
+ subdir('region')
+ subdir('remote-desktop')
+-subdir('secure-shell')
+ 
+ panels_libs += static_library(
+   cappletname,

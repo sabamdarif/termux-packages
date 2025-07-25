@@ -1,17 +1,3 @@
-From 114e1251d6a630d21c79c82457b8209a5387ff26 Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Wed, 23 Jul 2025 15:40:05 +0530
-Subject: [PATCH] fix paths
-
----
- build-aux/meson/find_xdg_file.py            | 2 +-
- panels/power/power-panel-scenario-tester.py | 2 +-
- panels/printers/pp-host.c                   | 2 +-
- panels/printers/pp-options-dialog.c         | 4 ++--
- panels/system/cc-password-utils.c           | 2 +-
- panels/system/datetime/tz.h                 | 4 ++--
- 6 files changed, 8 insertions(+), 8 deletions(-)
-
 diff --git a/build-aux/meson/find_xdg_file.py b/build-aux/meson/find_xdg_file.py
 index 8e12823..1704a72 100644
 --- a/build-aux/meson/find_xdg_file.py
@@ -95,6 +81,3 @@ index feef165..c50fd4d 100644
  #endif
  
  typedef struct _TzDB TzDB;
--- 
-2.48.1
-

@@ -1,15 +1,3 @@
-From ec0590babae3681f40dac5a23aa2e5dced7e0c0c Mon Sep 17 00:00:00 2001
-From: Md Arif <111168803+sabamdarif@users.noreply.github.com>
-Date: Wed, 23 Jul 2025 13:06:55 +0530
-Subject: [PATCH 5/6] remove udisks2 dependencies
-
----
- panels/applications/cc-snap-row.c             |   2 -
- .../system/about/cc-system-details-window.c   | 106 ++++++++++++------
- panels/system/meson.build                     |   3 -
- panels/system/region/cc-format-preview.c      |   6 +-
- 4 files changed, 78 insertions(+), 39 deletions(-)
-
 diff --git a/panels/applications/cc-snap-row.c b/panels/applications/cc-snap-row.c
 index f06318d..c78115e 100644
 --- a/panels/applications/cc-snap-row.c
@@ -235,6 +223,3 @@ index 895f063..547b3af 100644
    /* The returned pointer of nl_langinfo could be invalid after switching
       locale, so we must use it here. */
    is_imperial = fmt && *fmt == 2;
--- 
-2.48.1
-
