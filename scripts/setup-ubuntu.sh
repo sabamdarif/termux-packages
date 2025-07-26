@@ -319,6 +319,9 @@ PACKAGES+=" libzstd-dev"
 # Needed by wlroots
 PACKAGES+=" glslang-tools"
 
+PACKAGES+=" libgtk-4-dev"
+PACKAGES+=" libadwaita-1-dev"
+
 # Do not require sudo if already running as root.
 SUDO="sudo"
 if [ "$(id -u)" = "0" ]; then
