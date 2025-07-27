@@ -1,0 +1,158 @@
+diff --git a/panels/system/cc-system-panel.c b/panels/system/cc-system-panel.c
+index a81e9a4..bf58e46 100644
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -32,8 +32,10 @@
+ #include "datetime/cc-datetime-page.h"
+ #include "region/cc-region-page.h"
+ #include "remote-desktop/cc-remote-desktop-page.h"
++#ifndef __ANDROID__
+ #include "secure-shell/cc-secure-shell-page.h"
+ #include "users/cc-users-page.h"
++#endif
+ 
+ struct _CcSystemPanel
+ {
+@@ -43,9 +45,11 @@ struct _CcSystemPanel
+   AdwActionRow *datetime_row;
+   AdwActionRow *region_row;
+   AdwActionRow *remote_desktop_row;
++#ifndef __ANDROID__
+   AdwActionRow *users_row;
+ 
+   CcSecureShellPage *secure_shell_dialog;
++#endif
+   AdwNavigationPage *software_updates_group;
+ };
+ 
+@@ -118,6 +122,7 @@ cc_system_page_open_software_update (CcSystemPanel *self)
+     g_warning ("Failed to spawn %s: %s", argv[0], error->message);
+ }
+ 
++#ifndef __ANDROID__
+ static void
+ on_secure_shell_row_clicked (CcSystemPanel *self)
+ {
+@@ -130,7 +135,7 @@ on_secure_shell_row_clicked (CcSystemPanel *self)
+ 
+   adw_dialog_present (ADW_DIALOG (self->secure_shell_dialog), GTK_WIDGET (self));
+ }
+-
++#endif
+ static void
+ cc_system_panel_class_init (CcSystemPanelClass *klass)
+ {
+@@ -142,19 +147,25 @@ cc_system_panel_class_init (CcSystemPanelClass *klass)
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, datetime_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, region_row);
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, remote_desktop_row);
++#ifndef __ANDROID__
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, users_row);
++#endif
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, software_updates_group);
+ 
+   gtk_widget_class_bind_template_callback (widget_class, cc_system_page_open_software_update);
++#ifndef __ANDROID__
+   gtk_widget_class_bind_template_callback (widget_class, on_secure_shell_row_clicked);
++#endif
+ 
+   g_type_ensure (CC_TYPE_ABOUT_PAGE);
+   g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
+   g_type_ensure (CC_TYPE_LIST_ROW);
+   g_type_ensure (CC_TYPE_REGION_PAGE);
+   g_type_ensure (CC_TYPE_REMOTE_DESKTOP_PAGE);
++#ifndef __ANDROID__
+   g_type_ensure (CC_TYPE_SECURE_SHELL_PAGE);
+   g_type_ensure (CC_TYPE_USERS_PAGE);
++#endif
+ }
+ 
+ static void
+@@ -175,5 +186,7 @@ cc_system_panel_init (CcSystemPanel *self)
+   cc_panel_add_static_subpage (CC_PANEL (self), "datetime", CC_TYPE_DATE_TIME_PAGE);
+   cc_panel_add_static_subpage (CC_PANEL (self), "region", CC_TYPE_REGION_PAGE);
+   cc_panel_add_static_subpage (CC_PANEL (self), "remote-desktop", CC_TYPE_REMOTE_DESKTOP_PAGE);
++#ifndef __ANDROID__
+   cc_panel_add_static_subpage (CC_PANEL (self), "users", CC_TYPE_USERS_PAGE);
++#endif
+ }
+diff --git a/panels/system/cc-system-panel.ui b/panels/system/cc-system-panel.ui
+index 6de8b22..b06a984 100644
+--- a/panels/system/cc-system-panel.ui
++++ b/panels/system/cc-system-panel.ui
+@@ -37,18 +37,6 @@
+                       </object>
+                     </child>
+ 
+-                    <child>
+-                      <object class="CcListRow" id="users_row">
+-                        <property name="title" translatable="yes">_Users</property>
+-                        <property name="subtitle" translatable="yes">Add and remove accounts, change password</property>
+-                        <property name="icon-name">org.gnome.Settings-users-symbolic</property>
+-                        <property name="use-underline">True</property>
+-                        <property name="show-arrow">True</property>
+-                        <property name="action-name">navigation.push</property>
+-                        <property name="action-target">'users'</property>
+-                      </object>
+-                    </child>
+-
+                     <child>
+                       <object class="CcListRow" id="remote_desktop_row">
+                         <property name="title" translatable="yes">R_emote Desktop</property>
+@@ -60,16 +48,6 @@
+                       </object>
+                     </child>
+ 
+-                    <child>
+-                      <object class="CcListRow">
+-                        <property name="title" translatable="yes">Se_cure Shell</property>
+-                        <property name="subtitle" translatable="yes">SSH network access</property>
+-                        <property name="icon-name">utilities-terminal-symbolic</property>
+-                        <property name="show-arrow">True</property>
+-                        <signal name="activated" handler="on_secure_shell_row_clicked" object="CcSystemPanel" swapped="yes"/>
+-                      </object>
+-                    </child>
+-
+                     <child>
+                       <object class="CcListRow" id="about_row">
+                         <property name="title" translatable="yes">_About</property>
+diff --git a/panels/system/meson.build b/panels/system/meson.build
+index a9ac171..b8b06b9 100644
+--- a/panels/system/meson.build
++++ b/panels/system/meson.build
+@@ -41,23 +41,7 @@ sources = files(
+   'remote-desktop/cc-remote-desktop-page.c',
+   'remote-desktop/cc-remote-login-page.c',
+   'remote-desktop/cc-tls-certificate.c',
+-  'secure-shell/cc-secure-shell.c',
+-  'secure-shell/cc-secure-shell-page.c',
+-  'users/cc-add-user-dialog.c',
+-  'users/cc-avatar-chooser.c',
+-  'users/cc-crop-area.c',
+-  'users/cc-entry-feedback.c',
+-  'users/cc-enterprise-login-dialog.c',
+-  'users/cc-fingerprint-dialog.c',
+-  'users/cc-fingerprint-manager.c',
+-  'users/cc-password-dialog.c',
+-  'users/cc-realm-manager.c',
+-  'users/cc-user-page.c',
+-  'users/cc-users-page.c',
+-  'users/pw-utils.c',
+-  'users/run-passwd.c',
+-  'users/user-utils.c',
+-)
++  )
+ 
+ sources += gnome.compile_resources(
+   'cc-' + cappletname + '-resources',
+@@ -132,8 +116,10 @@ subdir('datetime')
+ subdir('icons')
+ subdir('region')
+ subdir('remote-desktop')
++if host_is_linux
+ subdir('secure-shell')
+ subdir('users')
++endif
+ 
+ panels_libs += static_library(
+   cappletname,
