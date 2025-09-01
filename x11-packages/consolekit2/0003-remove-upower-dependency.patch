@@ -1,0 +1,474 @@
+diff --git a/src/ck-sysdeps-linux.c b/src/ck-sysdeps-linux.c
+index ccdbc03..a237942 100644
+--- a/src/ck-sysdeps-linux.c
++++ b/src/ck-sysdeps-linux.c
+@@ -31,10 +31,6 @@
+ #include <sys/stat.h>
+ #include <sys/ioctl.h>
+ 
+-#include <sys/vt.h>
+-#include <linux/tty.h>
+-#include <linux/kd.h>
+-
+ #include <glib.h>
+ #include <glib/gstdio.h>
+ 
+@@ -59,6 +55,23 @@
+ #define ERROR -1
+ #endif
+ 
++/* Termux compatibility: Define fallback values for VT operations */
++#ifndef VT_GETSTATE
++#define VT_GETSTATE 0x5603
++#endif
++
++#ifndef MAX_NR_CONSOLES
++#define MAX_NR_CONSOLES 63
++#endif
++
++#ifndef _PATH_TTY
++#define _PATH_TTY "/dev/tty"
++#endif
++
++#ifndef _PATH_DEV
++#define _PATH_DEV "/dev/"
++#endif
++
+ /* adapted from procps */
+ struct _CkProcessStat
+ {
+@@ -718,7 +731,8 @@ ck_get_max_num_consoles (guint *num)
+ gboolean
+ ck_supports_activatable_consoles (void)
+ {
+-        return TRUE;
++        /* In Termux, we don't have real console switching capabilities */
++        return FALSE;
+ }
+ 
+ char *
+@@ -760,173 +774,45 @@ gboolean
+ ck_get_active_console_num (int    console_fd,
+                            guint *num)
+ {
+-        gboolean       ret;
+-        int            res;
+-        guint          active;
+-        struct vt_stat stat;
+-
+-        g_assert (console_fd != -1);
+-
+-        active = 0;
+-        ret = FALSE;
+-
+-        res = ioctl (console_fd, VT_GETSTATE, &stat);
+-        if (res == ERROR) {
+-                perror ("ioctl VT_GETSTATE");
+-                goto out;
+-        }
+-
+-        {
+-                int i;
+-
+-                g_debug ("Current VT: tty%d", stat.v_active);
+-                for (i = 1; i <= 16; i++) {
+-                        gboolean is_on;
+-                        is_on = stat.v_state & (1 << i);
+-
+-                        g_debug ("VT %d:%s", i, is_on ? "on" : "off");
+-                }
+-        }
+-
+-        active = stat.v_active;
+-        ret = TRUE;
+-
+- out:
++        /* In Termux, we can't get real VT state, so return a dummy value */
++        g_debug ("ck_get_active_console_num: Termux compatibility - returning console 1");
++        
+         if (num != NULL) {
+-                *num = active;
+-        }
+-
+-        return ret;
+-}
+-
+-/* adapted from upower-0.9 branch */
+-static gfloat
+-linux_get_used_swap (void)
+-{
+-        gchar *contents = NULL;
+-        gchar **lines = NULL;
+-        GError *error = NULL;
+-        gchar **tokens;
+-        gboolean ret;
+-        guint active = 0;
+-        guint swap_free = 0;
+-        guint swap_total = 0;
+-        guint len;
+-        guint i;
+-        gfloat percentage = 0.0f;
+-        const gchar *filename = "/proc/meminfo";
+-
+-        /* get memory data */
+-        ret = g_file_get_contents (filename, &contents, NULL, &error);
+-        if (!ret) {
+-                g_debug ("failed to open %s: %s", filename, error->message);
+-                g_error_free (error);
+-                goto out;
+-        }
+-
+-        /* process each line */
+-        lines = g_strsplit (contents, "\n", -1);
+-        for (i=1; lines[i] != NULL; i++) {
+-                tokens = g_strsplit_set (lines[i], ": ", -1);
+-                len = g_strv_length (tokens);
+-                if (len > 3) {
+-                        if (g_strcmp0 (tokens[0], "SwapFree") == 0)
+-                                swap_free = atoi (tokens[len-2]);
+-                        if (g_strcmp0 (tokens[0], "SwapTotal") == 0)
+-                                swap_total = atoi (tokens[len-2]);
+-                        else if (g_strcmp0 (tokens[0], "Active(anon)") == 0)
+-                                active = atoi (tokens[len-2]);
+-                }
+-                g_strfreev (tokens);
+-        }
+-
+-        /* first check if we even have swap, if not consider all swap space used */
+-        if (swap_total == 0) {
+-                g_debug ("no swap space found");
+-                percentage = 100.0f;
+-                goto out;
++                *num = 1;
+         }
+-        /* work out how close to the line we are */
+-        if (swap_free > 0 && active > 0)
+-                percentage = (active * 100) / swap_free;
+-        g_debug ("total swap available %i kb, active memory %i kb (%.1f%%)", swap_free, active, percentage);
+-out:
+-        g_free (contents);
+-        g_strfreev (lines);
+-        return percentage;
+-}
+-
+-/* adapted from upower-0.9 branch */
+-static gboolean
+-linux_check_enough_swap (void)
+-{
+-        gfloat waterline = 98.0f; /* 98% */
+-        gfloat used_swap = linux_get_used_swap();
+-
+-        if (used_swap < waterline) {
+-                        g_debug ("enough swap to hibernate");
+-                        return TRUE;
+-                } else {
+-                        g_debug ("not enough swap to hibernate");
+-                        return FALSE;
+-                }
+ 
+-        g_debug ("should not hit this in linux_check_enough_swap");
+-        return FALSE;
++        return TRUE;
+ }
+ 
+-
+-static gboolean
+-linux_supports_sleep_state (const gchar *state)
+-{
+-        gboolean ret = FALSE;
+-        gchar *command;
+-        GError *error = NULL;
+-        gint exit_status;
+-
+-        command = g_strdup_printf ("grep -q %s /sys/power/state", state);
+-        g_debug ("executing command: %s", command);
+-        ret = g_spawn_command_line_sync (command, NULL, NULL, &exit_status, &error);
+-        if (!ret) {
+-                g_debug ("failed to run script: %s", error->message);
+-                g_error_free (error);
+-                goto out;
+-        }
+-        ret = (WIFEXITED(exit_status) && (WEXITSTATUS(exit_status) == EXIT_SUCCESS));
+-
+-out:
+-        g_free (command);
+-
+-        return ret;
+-}
++/* TERMUX COMPATIBILITY: Dummy power management functions */
++/* These functions always return FALSE since power management is not relevant in Termux */
+ 
+ gboolean
+ ck_system_can_suspend (void)
+ {
+-        return linux_supports_sleep_state ("mem");
++        g_debug ("ck_system_can_suspend: Termux compatibility - suspend not supported");
++        return FALSE;
+ }
+ 
+ gboolean
+ ck_system_can_hibernate (void)
+ {
+-        if (linux_supports_sleep_state ("disk"))
+-		return linux_check_enough_swap() ;
++        g_debug ("ck_system_can_hibernate: Termux compatibility - hibernate not supported");
+         return FALSE;
+ }
+ 
+ gboolean
+ ck_system_can_hybrid_sleep (void)
+ {
+-        /* hybrid suspend will create the hibernation image as a fallback, then suspend to RAM */
+-        return (linux_supports_sleep_state ("disk") & linux_supports_sleep_state("mem"));
++        g_debug ("ck_system_can_hybrid_sleep: Termux compatibility - hybrid sleep not supported");
++        return FALSE;
+ }
+ 
++/* SELINUX support functions */
+ static gboolean
+ ck_selinux_open(void)
+ {
+ #ifdef HAVE_SELINUX
+-        TRACE ();
+-
+         if (label_hnd)
+                 return TRUE;
+ 
+@@ -1004,30 +890,7 @@ ck_make_tmpfs (guint uid, guint gid, const gchar *dest)
+         gchar        *context;
+         int           result;
+ 
+-        TRACE ();
+-
+-        context = ck_selinux_lookup_context(dest);
+-        if (context) {
+-                opts = g_strdup_printf ("mode=0700,uid=%d,rootcontext=%s", uid, context);
+-        } else {
+-                opts = g_strdup_printf ("mode=0700,uid=%d", uid);
+-        }
+-
+-        g_debug ("mounting tmpfs. uid=%d, gid=%d, dest=%s, opts=%s", uid, gid, dest, opts);
+-        result = mount("none", dest, "tmpfs", 0, opts);
+-
+-        g_free (context);
+-        g_free (opts);
+-
+-        if (result == 0) {
+-                return TRUE;
+-        } else {
+-                g_info ("Failed to create tmpfs mount, reason was: %s", strerror(errno));
+-                errno = 0;
+-                return FALSE;
+-        }
+-#endif
+-
++        g_debug ("ck_make_tmpfs: Mount not supported in this build");
+         return FALSE;
+ }
+ 
+@@ -1037,7 +900,7 @@ ck_remove_tmpfs (guint uid, const char* dest)
+ #ifdef HAVE_SYS_MOUNT_H
+         int           result;
+ 
+-        TRACE ();
++        g_debug ("ck_remove_tmpfs: Termux compatibility - attempting tmpfs unmount");
+ 
+         result = umount2(dest, MNT_DETACH);
+ 
+@@ -1045,156 +908,73 @@ ck_remove_tmpfs (guint uid, const char* dest)
+                 return TRUE;
+         }
+ 
+-        g_info ("Failed to unmount tmpfs mount, reason was: %s", strerror(errno));
++        g_info ("Failed to unmount tmpfs mount (Termux may not support umount), reason was: %s", strerror(errno));
+         errno = 0;
+ #endif
+ 
++        g_debug ("ck_remove_tmpfs: Unmount not supported in this build");
+         return FALSE;
+ }
+ 
++/* TERMUX COMPATIBILITY: VT signal handling functions */
++/* These are simplified for Termux compatibility */
++
+ #ifdef HAVE_SYS_VT_SIGNAL
+-/* For the moment this is Linux only.
+- * Returns the vt file descriptor or < 0 on failure.
+- * /sys/class/tty/tty0/active on Linux
+- */
++/* Termux compatibility: simplified VT signal handling */
+ gint
+ ck_get_vt_signal_fd (void)
+ {
+-        gint fd;
+-        const char *errmsg = NULL;
+-
+-        errno = 0;
+-        /* Open the magic Linux location */
+-        fd = open ("/sys/class/tty/tty0/active", O_RDONLY);
+-        if (fd < 0) {
+-                errmsg = g_strerror (errno);
+-                g_error ("ck_get_vt_signal_fd: Error opening sys file: %s",
+-                         errmsg);
+-        }
+-
+-        return fd;
+-}
+-
+-static gboolean
+-poll_vt_fd (gint sys_fd)
+-{
+-        struct pollfd fds[1];
+-        const char *errmsg = NULL;
+-
+-        errno = 0;
+-        fds[0].fd = sys_fd;
+-        fds[0].events = POLLPRI;
+-
+-        for(;;) {
+-                g_debug ("poll_vt_fd: polling");
+-                if (poll(fds, 1, -1) < 0) {
+-                        errmsg = g_strerror (errno);
+-
+-                        /* Error handling */
+-                        if (errno == EINTR || errno == EAGAIN) {
+-                                g_debug ("poll_vt_fd: Interrupted while waiting for vt event: %s",
+-                                          errmsg);
+-                                /* try again */
+-                        } else {
+-                                g_error ("poll_vt_fd: Error polling for vt event: %s",
+-                                         errmsg);
+-                                return FALSE;
+-                        }
+-                } else if (fds[0].revents & POLLPRI) {
+-                        /* There's something we care about! */
+-                        return TRUE;
+-                } else {
+-                        /* Something we don't care about */
+-                }
+-        }
+-
+-        return FALSE;
++        g_debug ("ck_get_vt_signal_fd: Termux compatibility - VT signals not supported");
++        return -1;
+ }
+ 
+-static gint
+-read_from_vt_fd (gint sys_fd)
+-{
+-        gint ret = -1;
+-        char new_vt[32];
+-        ssize_t bytes_read = 0;
+-
+-        new_vt[31] = '\0';
+-
+-        while (bytes_read == 0) {
+-                errno = 0;
+-
+-                bytes_read = read (sys_fd, &new_vt, 30);
+-                if (bytes_read == -1 && (errno == EAGAIN || errno == EINTR)) {
+-                        g_debug ("read_from_vt_fd: Interrupted while reading from sys_fd: %s",
+-                                 g_strerror (errno));
+-
+-                        bytes_read = 0;
+-                        /* try again */
+-                } else if (bytes_read == -1) {
+-                        g_error ("read_from_vt_fd: Error while reading from sys_fd: %s",
+-                                 g_strerror (errno));
+-                        ret = -1;
+-                } else {
+-                        gchar unused[32];
+-                        gint  vty_num;
+-
+-                        g_debug ("read_from_vt_fd: got %s", new_vt);
+-
+-                        if(sscanf (new_vt, "%31[a-z-A-Z]%d", unused, &vty_num) == 2) {
+-                                g_debug ("read_from_vt_fd: parsed as %s %d", unused, vty_num);
+-                                ret = vty_num;
+-                        }
+-
+-                        /* back to the beginning of the fd */
+-                        if (lseek(sys_fd, 0,SEEK_SET) < 0)
+-                        {
+-                                g_debug ("read_from_vt_fd: error seeking to beginning of file %s",
+-                                         g_strerror (errno));
+-                                ret = -1;
+-                        }
+-                }
+-        }
+-
+-        return ret;
+-}
+-
+-/*
+- * Returns FALSE if something went wrong with reading/polling the
+- * vt fd for VT changes.
+- */
+ gboolean
+ ck_wait_for_console_switch (gint sys_fd, gint32 *num)
+ {
+-        gint new_vt = -1;
+-
+-        g_debug ("ck_wait_for_console_switch: sys_fd opened");
+-
+-        /* Poll for changes */
+-        if (poll_vt_fd (sys_fd)) {
+-                g_debug ("ck_wait_for_console_switch: poll_vt_fd returned");
+-                /* Read the changes */
+-                new_vt = read_from_vt_fd (sys_fd);
+-                if (new_vt >= 0) {
+-                        g_debug ("ck_wait_for_console_switch: read successful");
+-                        /* success, update */
+-                        if (num != NULL) {
+-                                *num = new_vt;
+-                        }
+-                }
++        g_debug ("ck_wait_for_console_switch: Termux compatibility - console switching not supported");
++        
++        if (num != NULL) {
++                *num = 1;
+         }
+ 
+-        return new_vt < 0 ? FALSE : TRUE;
++        return FALSE;
+ }
+ #endif /* HAVE_SYS_VT_SIGNAL */
+ 
+ gboolean
+ ck_sysdeps_init (void)
+ {
++        g_debug ("ck_sysdeps_init: Termux compatibility initialization");
+         return ck_selinux_open();
+ }
+ 
+ void
+ ck_sysdeps_fini (void)
+ {
++        g_debug ("ck_sysdeps_fini: Termux compatibility cleanup");
+         ck_selinux_close();
+-}
++} Termux compatibility - attempting tmpfs mount");
++
++        context = ck_selinux_lookup_context(dest);
++        if (context) {
++                opts = g_strdup_printf ("mode=0700,uid=%d,rootcontext=%s", uid, context);
++        } else {
++                opts = g_strdup_printf ("mode=0700,uid=%d", uid);
++        }
++
++        g_debug ("mounting tmpfs. uid=%d, gid=%d, dest=%s, opts=%s", uid, gid, dest, opts);
++        result = mount("none", dest, "tmpfs", 0, opts);
++
++        g_free (context);
++        g_free (opts);
++
++        if (result == 0) {
++                return TRUE;
++        } else {
++                g_info ("Failed to create tmpfs mount (Termux may not support tmpfs), reason was: %s", strerror(errno));
++                errno = 0;
++                return FALSE;
++        }
++#endif
++
++        g_debug ("ck_make_tmpfs:
