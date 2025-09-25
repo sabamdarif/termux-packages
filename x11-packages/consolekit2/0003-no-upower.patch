@@ -1,8 +1,16 @@
 diff --git a/src/ck-sysdeps-linux.c b/src/ck-sysdeps-linux.c
-index ccdbc03..a237942 100644
+index ccdbc03..c827e1a 100644
 --- a/src/ck-sysdeps-linux.c
 +++ b/src/ck-sysdeps-linux.c
-@@ -31,10 +31,6 @@
+@@ -1,6 +1,7 @@
+ /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+  *
+  * Copyright (C) 2006 William Jon McCann <mccann@jhu.edu>
++ * Modified for Termux compatibility - removed UPower dependencies
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+@@ -31,10 +32,6 @@
  #include <sys/stat.h>
  #include <sys/ioctl.h>
  
@@ -13,7 +21,7 @@ index ccdbc03..a237942 100644
  #include <glib.h>
  #include <glib/gstdio.h>
  
-@@ -59,6 +55,23 @@
+@@ -59,6 +56,23 @@
  #define ERROR -1
  #endif
  
@@ -37,7 +45,7 @@ index ccdbc03..a237942 100644
  /* adapted from procps */
  struct _CkProcessStat
  {
-@@ -718,7 +731,8 @@ ck_get_max_num_consoles (guint *num)
+@@ -718,7 +732,8 @@ ck_get_max_num_consoles (guint *num)
  gboolean
  ck_supports_activatable_consoles (void)
  {
@@ -47,7 +55,7 @@ index ccdbc03..a237942 100644
  }
  
  char *
-@@ -760,173 +774,45 @@ gboolean
+@@ -760,173 +775,45 @@ gboolean
  ck_get_active_console_num (int    console_fd,
                             guint *num)
  {
@@ -234,7 +242,7 @@ index ccdbc03..a237942 100644
          if (label_hnd)
                  return TRUE;
  
-@@ -1004,30 +890,7 @@ ck_make_tmpfs (guint uid, guint gid, const gchar *dest)
+@@ -1004,30 +891,7 @@ ck_make_tmpfs (guint uid, guint gid, const gchar *dest)
          gchar        *context;
          int           result;
  
@@ -266,7 +274,7 @@ index ccdbc03..a237942 100644
          return FALSE;
  }
  
-@@ -1037,7 +900,7 @@ ck_remove_tmpfs (guint uid, const char* dest)
+@@ -1037,7 +901,7 @@ ck_remove_tmpfs (guint uid, const char* dest)
  #ifdef HAVE_SYS_MOUNT_H
          int           result;
  
@@ -275,7 +283,7 @@ index ccdbc03..a237942 100644
  
          result = umount2(dest, MNT_DETACH);
  
-@@ -1045,156 +908,73 @@ ck_remove_tmpfs (guint uid, const char* dest)
+@@ -1045,156 +909,73 @@ ck_remove_tmpfs (guint uid, const char* dest)
                  return TRUE;
          }
  
