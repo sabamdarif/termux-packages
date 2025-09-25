@@ -1,0 +1,71 @@
+diff --git a/data/meson.build b/data/meson.build
+index bd66ff0..bd56da1 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -12,25 +12,32 @@ shell_component = {
+   desktop_plain: 'org.gnome.Shell',
+ }
+ 
++base_components = [
++  'org.gnome.SettingsDaemon.A11ySettings',
++  'org.gnome.SettingsDaemon.Datetime',
++  'org.gnome.SettingsDaemon.Housekeeping',
++  'org.gnome.SettingsDaemon.Keyboard',
++  'org.gnome.SettingsDaemon.MediaKeys',
++  'org.gnome.SettingsDaemon.Rfkill',
++  'org.gnome.SettingsDaemon.ScreensaverProxy',
++  'org.gnome.SettingsDaemon.Sharing',
++  'org.gnome.SettingsDaemon.Smartcard',
++  'org.gnome.SettingsDaemon.Sound', 
++  'org.gnome.SettingsDaemon.XSettings',
++]
++
++if host_machine.system() == 'linux' and not host_machine.system().contains('android')
++base_components += [
++  'org.gnome.SettingsDaemon.Color',
++  'org.gnome.SettingsDaemon.Power',
++  'org.gnome.SettingsDaemon.UsbProtection',
++  'org.gnome.SettingsDaemon.PrintNotifications',
++  'org.gnome.SettingsDaemon.Wacom',
++]
++endif
++
+ required_components = {
+-  desktop_plain: [
+-    'org.gnome.SettingsDaemon.A11ySettings',
+-    'org.gnome.SettingsDaemon.Color',
+-    'org.gnome.SettingsDaemon.Datetime',
+-    'org.gnome.SettingsDaemon.Housekeeping',
+-    'org.gnome.SettingsDaemon.Keyboard',
+-    'org.gnome.SettingsDaemon.MediaKeys',
+-    'org.gnome.SettingsDaemon.Power',
+-    'org.gnome.SettingsDaemon.PrintNotifications',
+-    'org.gnome.SettingsDaemon.Rfkill',
+-    'org.gnome.SettingsDaemon.ScreensaverProxy',
+-    'org.gnome.SettingsDaemon.Sharing',
+-    'org.gnome.SettingsDaemon.Smartcard',
+-    'org.gnome.SettingsDaemon.Sound',
+-    'org.gnome.SettingsDaemon.UsbProtection',
+-    'org.gnome.SettingsDaemon.Wacom',
+-    'org.gnome.SettingsDaemon.XSettings',
+-  ],
++  desktop_plain: base_components,
+ }
+ 
+ if enable_session_selector
+@@ -110,6 +117,7 @@ install_data(
+   install_dir: join_paths(session_datadir, 'glib-2.0', 'schemas'),
+ )
+ 
++if get_option('systemd')
+ unit_conf = configuration_data()
+ unit_conf.set('libexecdir', session_libexecdir)
+ 
+@@ -176,6 +184,7 @@ foreach session, req_components: required_components
+       session),
+   )
+ endforeach
++endif
+ 
+ data = files('hardware-compatibility')
+ 

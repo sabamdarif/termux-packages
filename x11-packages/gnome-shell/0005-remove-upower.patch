@@ -1,0 +1,233 @@
+diff --git a/js/ui/endSessionDialog.js b/js/ui/endSessionDialog.js
+index 2bba883..b268e7b 100644
+--- a/js/ui/endSessionDialog.js
++++ b/js/ui/endSessionDialog.js
+@@ -24,7 +24,9 @@ import Pango from 'gi://Pango';
+ import Polkit from 'gi://Polkit';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
++#ifndef __TERMUX__
+ import UPower from 'gi://UPowerGlib';
++#endif
+ 
+ import * as CheckBox from './checkBox.js';
+ import * as Dialog from './dialog.js';
+@@ -76,7 +78,11 @@ const shutdownDialogContent = {
+             seconds).format(seconds);
+     },
+     checkBoxText: C_('checkbox', 'Install pending software updates'),
++#ifdef __TERMUX__
++    showBatteryWarning: false,
++#else
+     showBatteryWarning: true,
++#endif
+     confirmButtons: [{
+         signal: 'ConfirmedShutdown',
+         label: C_('button', 'Power Off'),
+@@ -95,7 +101,11 @@ const restartDialogContent = {
+             seconds).format(seconds);
+     },
+     checkBoxText: C_('checkbox', 'Install pending software updates'),
++#ifdef __TERMUX__
++    showBatteryWarning: false,
++#else
+     showBatteryWarning: true,
++#endif
+     confirmButtons: [{
+         signal: 'ConfirmedReboot',
+         label: C_('button', 'Restart'),
+@@ -113,7 +123,11 @@ const restartUpdateDialogContent = {
+             'The system will automatically restart and install updates in %d seconds',
+             seconds).format(seconds);
+     },
++#ifdef __TERMUX__
++    showBatteryWarning: false,
++#else
+     showBatteryWarning: true,
++#endif
+     confirmButtons: [{
+         signal: 'ConfirmedReboot',
+         label: C_('button', 'Restart & Install'),
+@@ -167,8 +181,10 @@ const LogindSession = Gio.DBusProxy.makeProxyWrapper(LogindSessionIface);
+ const PkOfflineIface = loadInterfaceXML('org.freedesktop.PackageKit.Offline');
+ const PkOfflineProxy = Gio.DBusProxy.makeProxyWrapper(PkOfflineIface);
+ 
++#ifndef __TERMUX__
+ const UPowerIface = loadInterfaceXML('org.freedesktop.UPower.Device');
+ const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(UPowerIface);
++#endif
+ 
+ function findAppFromInhibitor(inhibitor) {
+     let desktopFile;
+@@ -245,6 +261,15 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
+             '/org/freedesktop/PackageKit',
+             this._onPkOfflineProxyCreated.bind(this));
+ 
++#ifdef __TERMUX__
++        // Fake power proxy for Termux - always report no battery/AC power
++        this._powerProxy = {
++            IsPresent: false,
++            State: 2, // Mock FULLY_CHARGED state
++            Percentage: 100
++        };
++        this._sync();
++#else
+         this._powerProxy = new UPowerProxy(Gio.DBus.system,
+             'org.freedesktop.UPower',
+             '/org/freedesktop/UPower/devices/DisplayDevice',
+@@ -257,6 +282,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
+                     this._sync.bind(this));
+                 this._sync();
+             });
++#endif
+ 
+         this._secondsLeft = 0;
+         this._totalSecondsToStayOpen = 0;
+@@ -331,16 +357,27 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
+     }
+ 
+     _isDischargingBattery() {
++#ifdef __TERMUX__
++        return false; // No battery concept in Termux
++#else
+         return this._powerProxy.IsPresent &&
+             this._powerProxy.State !== UPower.DeviceState.CHARGING &&
+             this._powerProxy.State !== UPower.DeviceState.FULLY_CHARGED;
++#endif
+     }
+ 
+     _isBatteryLow() {
++#ifdef __TERMUX__
++        return false; // No battery in Termux, never low
++#else
+         return this._isDischargingBattery() && this._powerProxy.Percentage < LOW_BATTERY_THRESHOLD;
++#endif
+     }
+ 
+     _shouldShowLowBatteryWarning(dialogContent) {
++#ifdef __TERMUX__
++        return false; // Never show battery warning in Termux
++#else
+         if (!dialogContent.showBatteryWarning)
+             return false;
+ 
+@@ -354,6 +391,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
+         // the user doesn't have enough permissions to cancel them.
+         let updatesAllowed = this._updatesPermission && this._updatesPermission.allowed;
+         return this._updateInfo.UpdatePrepared && this._updateInfo.UpdateTriggered && !updatesAllowed;
++#endif
+     }
+ 
+     _sync() {
+diff --git a/js/ui/status/system.js b/js/ui/status/system.js
+index baebf21..b5caf5e 100644
+--- a/js/ui/status/system.js
++++ b/js/ui/status/system.js
+@@ -6,7 +6,6 @@ import GObject from 'gi://GObject';
+ import Meta from 'gi://Meta';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+-import UPower from 'gi://UPowerGlib';
+ 
+ import * as SystemActions from '../../misc/systemActions.js';
+ import * as Main from '../main.js';
+@@ -19,8 +18,11 @@ import {loadInterfaceXML} from '../../misc/fileUtils.js';
+ const BUS_NAME = 'org.freedesktop.UPower';
+ const OBJECT_PATH = '/org/freedesktop/UPower/devices/DisplayDevice';
+ 
+-const DisplayDeviceInterface = loadInterfaceXML('org.freedesktop.UPower.Device');
+-const PowerManagerProxy = Gio.DBusProxy.makeProxyWrapper(DisplayDeviceInterface);
++// Fake UPower states for Termux compatibility
++const FakeUPowerDeviceState = {
++    CHARGING: 1,
++    FULLY_CHARGED: 4,
++};
+ 
+ const SHOW_BATTERY_PERCENTAGE = 'show-battery-percentage';
+ 
+@@ -38,14 +40,42 @@ const PowerToggle = GObject.registerClass({
+ 
+         this.add_style_class_name('power-item');
+ 
+-        this._proxy = new PowerManagerProxy(Gio.DBus.system, BUS_NAME, OBJECT_PATH,
+-            (proxy, error) => {
+-                if (error)
+-                    console.error(error.message);
+-                else
+-                    this._proxy.connect('g-properties-changed', () => this._sync());
++        // Check if we're on Android/Termux - use fake data
++        const isAndroid = GLib.file_test('/system/build.prop', GLib.FileTest.EXISTS) ||
++                         GLib.getenv('TERMUX_VERSION') !== null;
++
++        if (isAndroid) {
++            this._proxy = {
++                IsPresent: false,  // Hide battery on Termux
++                State: FakeUPowerDeviceState.FULLY_CHARGED,
++                Percentage: 100,
++                IconName: 'battery-level-100-charged-symbolic'
++            };
++            this._sync();
++        } else {
++            try {
++                const DisplayDeviceInterface = loadInterfaceXML('org.freedesktop.UPower.Device');
++                const PowerManagerProxy = Gio.DBusProxy.makeProxyWrapper(DisplayDeviceInterface);
++
++                this._proxy = new PowerManagerProxy(Gio.DBus.system, BUS_NAME, OBJECT_PATH,
++                    (proxy, error) => {
++                        if (error)
++                            console.error(error.message);
++                        else
++                            this._proxy.connect('g-properties-changed', () => this._sync());
++                        this._sync();
++                    });
++            } catch (e) {
++                console.warn('UPower not available, using fake battery data');
++                this._proxy = {
++                    IsPresent: false,
++                    State: FakeUPowerDeviceState.FULLY_CHARGED,
++                    Percentage: 100,
++                    IconName: 'battery-level-100-charged-symbolic'
++                };
+                 this._sync();
+-            });
++            }
++        }
+ 
+         this.bind_property('fallback-icon-name',
+             this._icon, 'fallback-icon-name',
+@@ -55,7 +85,8 @@ const PowerToggle = GObject.registerClass({
+             const app = Shell.AppSystem.get_default().lookup_app('gnome-power-panel.desktop');
+             Main.overview.hide();
+             Main.panel.closeQuickSettings();
+-            app.activate();
++            if (app)
++                app.activate();
+         });
+ 
+         Main.sessionMode.connect('updated', () => this._sessionUpdated());
+@@ -74,12 +105,12 @@ const PowerToggle = GObject.registerClass({
+             return;
+ 
+         // The icons
+-        let chargingState = this._proxy.State === UPower.DeviceState.CHARGING
++        let chargingState = this._proxy.State === FakeUPowerDeviceState.CHARGING
+             ? '-charging' : '';
+         let fillLevel = 10 * Math.floor(this._proxy.Percentage / 10);
+         const charged =
+-            this._proxy.State === UPower.DeviceState.FULLY_CHARGED ||
+-            (this._proxy.State === UPower.DeviceState.CHARGING && fillLevel === 100);
++            this._proxy.State === FakeUPowerDeviceState.FULLY_CHARGED ||
++            (this._proxy.State === FakeUPowerDeviceState.CHARGING && fillLevel === 100);
+         const icon = charged
+             ? 'battery-level-100-charged-symbolic'
+             : `battery-level-${fillLevel}${chargingState}-symbolic`;
+@@ -144,7 +175,8 @@ class SettingsItem extends QuickSettingsItem {
+         this.connect('clicked', () => {
+             Main.overview.hide();
+             Main.panel.closeQuickSettings();
+-            this._settingsApp.activate();
++            if (this._settingsApp)
++                this._settingsApp.activate();
+         });
+ 
+         Main.sessionMode.connectObject('updated', () => this._sync(), this);
