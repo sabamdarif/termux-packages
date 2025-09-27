@@ -1,0 +1,19 @@
+TERMUX_PKG_HOMEPAGE=https://kde.org/plasma-desktop/
+TERMUX_PKG_DESCRIPTION="KDE Plasma Desktop"
+TERMUX_PKG_LICENSE="LGPL-2.0-or-later"
+TERMUX_PKG_MAINTAINER="@termux"
+TERMUX_PKG_VERSION="6.4.4"
+TERMUX_PKG_SRCURL="https://download.kde.org/stable/plasma/${TERMUX_PKG_VERSION}/plasma-desktop-${TERMUX_PKG_VERSION}.tar.xz"
+TERMUX_PKG_SHA256=4d70b9bf99f59b3bdea7b8240a0b7df803bd16c0ae9cc534ca3617a9f9c54013
+TERMUX_PKG_AUTO_UPDATE=true
+TERMUX_PKG_DEPENDS="libc++, kf6-attica, kf6-baloo, kf6-kauth, kf6-kbookmarks, kf6-kcmutils, kf6-kcodecs, kf6-kcompletion, kf6-kconfig, kf6-kconfigwidgets, kf6-kcoreaddons, kf6-kcrash, kf6-kdbusaddons, kf6-kdeclarative, kf6-kglobalaccel, kf6-kguiaddons, kf6-ki18n, kf6-kiconthemes, kf6-kio, kf6-kirigami, kf6-kirigami-addons, kf6-kitemmodels, kf6-kitemviews, kf6-kjobwidgets, kf6-knewstuff, kf6-knotifications, kf6-knotifyconfig, kf6-kpackage, kpipewire, kf6-krunner, kf6-kservice, kf6-ksvg, kf6-kwidgetsaddons, kf6-kwindowsystem, kf6-kxmlgui, libcanberra, libx11, libxcb, libxcursor, libxi, libxkbcommon, libxkbfile, libplasma, opengl, plasma-activities, plasma-activities-stats, plasma-workspace, plasma5support, qt6-qt5compat, qt6-qtbase, qt6-qtdeclarative, sdl2 | sdl2-compat, kf6-solid, kf6-sonnet, xcb-util-keysyms"
+TERMUX_PKG_BUILD_DEPENDS="extra-cmake-modules, intltool"
+TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
+-DCMAKE_SYSTEM_NAME=Linux
+-DBUILD_KCM_TABLET=OFF
+-DBUILD_KCM_MOUSE_X11=OFF
+-DBUILD_KCM_MOUSE_KWIN_WAYLAND=OFF
+-DBUILD_KCM_TOUCHPAD_X11=OFF
+-DBUILD_KCM_TOUCHPAD_KWIN_WAYLAND=OFF
+-DBUILD_DOC=OFF
+"

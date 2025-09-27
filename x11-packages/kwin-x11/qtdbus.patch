@@ -1,0 +1,12 @@
+diff --git a/src/kcms/rules/CMakeLists.txt b/src/kcms/rules/CMakeLists.txt
+index 0935ce5..6b4a59a 100644
+--- a/src/kcms/rules/CMakeLists.txt
++++ b/src/kcms/rules/CMakeLists.txt
+@@ -30,6 +30,7 @@ endif()
+ 
+ set(kcm_libs
+     Qt::Quick
++    Qt::DBus
+ 
+     KF6::KCMUtils
+     KF6::I18n

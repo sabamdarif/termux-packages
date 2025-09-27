@@ -1,0 +1,42 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3b89d76..372f693 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -315,7 +315,7 @@ find_package(UDev)
+ set_package_properties(UDev PROPERTIES
+     URL "https://www.freedesktop.org/wiki/Software/systemd/"
+     DESCRIPTION "Linux device library."
+-    TYPE REQUIRED
++    TYPE OPTIONAL
+     PURPOSE "Required for input handling on Wayland."
+ )
+ 
+@@ -323,7 +323,7 @@ find_package(Libdrm 2.4.116)
+ set_package_properties(Libdrm PROPERTIES TYPE REQUIRED PURPOSE "Required for drm output on Wayland.")
+ 
+ find_package(gbm)
+-set_package_properties(gbm PROPERTIES TYPE REQUIRED PURPOSE "Required for egl output of drm backend.")
++set_package_properties(gbm PROPERTIES TYPE OPTIONAL PURPOSE "Required for egl output of drm backend.")
+ if (gbm_VERSION VERSION_GREATER_EQUAL 21.1)
+     set(HAVE_GBM_BO_GET_FD_FOR_PLANE 1)
+ else()
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index cddf8cd..f0c6bfe 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -256,7 +256,6 @@ target_link_libraries(kwin
+         KDecoration3::KDecoration
+         KDecoration3::KDecoration3Private
+ 
+-        UDev::UDev
+         XKB::XKB
+         EGL::EGL
+         epoxy::epoxy
+@@ -265,7 +264,6 @@ target_link_libraries(kwin
+         lcms2::lcms2
+         PkgConfig::libdisplayinfo
+         Libdrm::Libdrm
+-        gbm::gbm
+ )
+ 
+ if (TARGET K::KGlobalAccelD)

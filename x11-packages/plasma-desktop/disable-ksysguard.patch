@@ -1,0 +1,54 @@
+diff --git a/applets/taskmanager/CMakeLists.txt b/applets/taskmanager/CMakeLists.txt
+index d3d2968..845540a 100644
+--- a/applets/taskmanager/CMakeLists.txt
++++ b/applets/taskmanager/CMakeLists.txt
+@@ -34,7 +34,6 @@ target_link_libraries(taskmanagerplugin PRIVATE
+                       KF6::KIOFileWidgets # KFilePlacesModel
+                       KF6::Notifications # KNotificationJobUiDelegate
+                       Plasma::Plasma
+-                      KSysGuard::ProcessCore
+                       KF6::Service
+                       KF6::WindowSystem
+                       PW::LibNotificationManager)
+diff --git a/applets/taskmanager/backend.cpp b/applets/taskmanager/backend.cpp
+index b22039b..9e0d2b2 100644
+--- a/applets/taskmanager/backend.cpp
++++ b/applets/taskmanager/backend.cpp
+@@ -38,8 +38,6 @@
+ #include <PlasmaActivities/Stats/ResultSet>
+ #include <PlasmaActivities/Stats/Terms>
+ 
+-#include <processcore/process.h>
+-#include <processcore/processes.h>
+ 
+ namespace KAStats = KActivities::Stats;
+ 
+@@ -489,28 +489,6 @@ bool Backend::isApplication(const QUrl &url) const
+ 
+ qint64 Backend::parentPid(qint64 pid) const
+ {
+-    KSysGuard::Processes procs;
+-    procs.updateOrAddProcess(pid);
+-
+-    KSysGuard::Process *proc = procs.getProcess(pid);
+-    if (!proc) {
+-        return -1;
+-    }
+-
+-    int parentPid = proc->parentPid();
+-    if (parentPid != -1) {
+-        procs.updateOrAddProcess(parentPid);
+-
+-        KSysGuard::Process *parentProc = procs.getProcess(parentPid);
+-        if (!parentProc) {
+-            return -1;
+-        }
+-
+-        if (!proc->cGroup().isEmpty() && parentProc->cGroup() == proc->cGroup()) {
+-            return parentProc->pid();
+-        }
+-    }
+-
+     return -1;
+ }
+ 
