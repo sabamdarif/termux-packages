@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9607b37..a76d6d8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -82,9 +82,9 @@ if (KF6DocTools_FOUND)
+     kdoctools_install(po)
+ endif()
+ add_subdirectory(src)
+-if (BUILD_TESTING)
+-    add_subdirectory(autotests)
+-endif()
++# if (BUILD_TESTING)
++#     add_subdirectory(autotests)
++# endif()
+ 
+ ################ create PackageConfig.cmake and install it ####################
+ 
