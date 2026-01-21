@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<dump>
+  <class name="GtkSessionLockInstance" get-type="gtk_session_lock_instance_get_type" parents="GObject">
+    <signal name="monitor" return="void" when="first">
+      <param type="GdkMonitor"/>
+    </signal>
+    <signal name="locked" return="void" when="first">
+    </signal>
+    <signal name="failed" return="void" when="first">
+    </signal>
+    <signal name="unlocked" return="void" when="first">
+    </signal>
+  </class>
+</dump>

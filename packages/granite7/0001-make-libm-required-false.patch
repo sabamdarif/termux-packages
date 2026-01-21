@@ -1,0 +1,12 @@
+diff --git a/lib/meson.build b/lib/meson.build
+index 5d73c9f..4316d58 100644
+--- a/lib/meson.build
++++ b/lib/meson.build
+@@ -74,7 +74,7 @@ libgranite = library(
+ 
+     dependencies: [
+         libgranite_deps,
+-        meson.get_compiler('c').find_library('m'),
++        meson.get_compiler('c').find_library('m', required: false),
+         meson.get_compiler('vala').find_library('posix')
+     ],
