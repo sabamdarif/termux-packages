@@ -1,0 +1,135 @@
+diff --git a/frontend/utility/system-info-posix.cpp b/frontend/utility/system-info-posix.cpp
+index 474830c..2d90b12 100644
+--- a/frontend/utility/system-info-posix.cpp
++++ b/frontend/utility/system-info-posix.cpp
+@@ -7,6 +7,11 @@
+ #include <fstream>
+ #include <regex>
+ 
++#ifdef __ANDROID__
++#include <optional>
++#include <vector>
++#endif
++
+ using namespace std;
+ 
+ extern "C" {
+@@ -206,16 +211,31 @@ bool get_cpu_name(optional<std::string> &proc_name)
+ 	/* Initialize processor name. Some ARM-based hosts do
+ 	 * not output the "model name" field in /proc/cpuinfo.
+ 	 */
++#ifdef __ANDROID__
++	proc_name = "Unknown ARM Processor";
++#else
+ 	proc_name = "Unavailable";
++#endif
+ 
+ 	if (file.is_open()) {
+ 		while (getline(file, line)) {
+-			if (line.compare(0, 10, "model name") == 0) {
++#ifdef __ANDROID__
++			if (line.compare(0, 8, "Hardware") == 0 ||
++			    line.compare(0, 9, "Processor") == 0 ||
++			    line.compare(0, 10, "model name") == 0)
++#else
++			if (line.compare(0, 10, "model name") == 0)
++#endif
++			{
+ 				size_t pos = line.find(':');
+ 				if (pos != std::string::npos && line.at(pos + 1) != '\0') {
+ 					proc_name = line.substr(pos + 1);
+ 					trim_ws((std::string &)proc_name);
+ 					found_name = true;
++#ifdef __ANDROID__
++					if (!proc_name->empty() && *proc_name != "Processor")
++						break;
++#endif
+ 					continue;
+ 				}
+ 			}
+@@ -423,6 +443,26 @@ void get_drm_cards(std::vector<drm_card_info> &cards)
+  */
+ std::optional<std::vector<GoLiveApi::Gpu>> system_gpu_data()
+ {
++#ifdef __ANDROID__
++	std::vector<GoLiveApi::Gpu> adapter_info;
++	GoLiveApi::Gpu gpu{};
++
++	obs_enter_graphics();
++	const char *renderer = gs_get_renderer();
++	const char *driver_ver = gs_get_driver_version();
++
++	gpu.dedicated_video_memory = (uint64_t)gs_get_gpu_dmem() * 1024 * 1024;
++	gpu.shared_system_memory = (uint64_t)gs_get_gpu_smem() * 1024 * 1024;
++	obs_leave_graphics();
++
++	gpu.vendor_id = 0; // Blocked by SELinux on Android
++	gpu.device_id = 0;
++	gpu.model = renderer && *renderer ? renderer : "Unknown Android GPU";
++	gpu.driver_version = driver_ver ? driver_ver : "Unknown Android Driver";
++
++	adapter_info.push_back(gpu);
++	return adapter_info;
++#else
+ 	std::vector<GoLiveApi::Gpu> adapter_info;
+ 	GoLiveApi::Gpu gpu;
+ 	std::string gs_driver_version;
+@@ -583,11 +623,52 @@ std::optional<std::vector<GoLiveApi::Gpu>> system_gpu_data()
+ 	}
+ 
+ 	return adapter_info;
++#endif
+ }
+ } // namespace
+ 
+ void system_info(GoLiveApi::Capabilities &capabilities)
+ {
++#ifdef __ANDROID__
++	capabilities = GoLiveApi::Capabilities{};
++
++	// GPU Data
++	capabilities.gpu = system_gpu_data();
++
++	// CPU
++	auto &cpu_data = capabilities.cpu;
++	cpu_data.physical_cores = os_get_physical_cores();
++	cpu_data.logical_cores = os_get_logical_cores();
++	get_cpu_name(cpu_data.name);
++
++	uint32_t cpu_freq;
++	if (get_cpu_freq(cpu_freq))
++		cpu_data.speed = cpu_freq;
++
++	// Memory
++	auto &memory_data = capabilities.memory;
++	memory_data.total = os_get_sys_total_size();
++	memory_data.free = os_get_sys_free_size();
++
++	// System
++	auto &system_data = capabilities.system;
++	system_data.name = "Android";
++	system_data.arm = true;
++	system_data.armEmulation = os_get_emulation_status();
++
++	struct utsname utsinfo;
++	if (uname(&utsinfo) == 0) {
++		system_data.release = utsinfo.release;
++		system_data.bits = sizeof(void*) * 8;
++		system_data.version = std::string(utsinfo.sysname) + " " + utsinfo.release;
++	} else {
++		system_data.release = "unknown";
++		system_data.version = "Android (Generic)";
++		system_data.bits = 64;
++	}
++
++	UNUSED_PARAMETER(capabilities.gaming_features);
++#else
+ 	// Determine the GPU capabilities
+ 	capabilities.gpu = system_gpu_data();
+ 
+@@ -669,4 +750,5 @@ void system_info(GoLiveApi::Capabilities &capabilities)
+ 
+ 		system_data.armEmulation = os_get_emulation_status();
+ 	}
++#endif
+ }
