@@ -153,7 +153,7 @@ index d0260eb23d..2ad7fc2c0b 100644
      forward_variables_from(invoker, "*")
  
      check_includes = false
-@@ -766,6 +790,18 @@ skia_source_set("skia_core_and_effects") {
+@@ -766,6 +790,19 @@ skia_source_set("skia_core_and_effects") {
    sources += skia_effects_sources
    sources += skia_effects_imagefilter_sources
    sources += skia_pathops_sources
@@ -162,6 +162,7 @@ index d0260eb23d..2ad7fc2c0b 100644
 +    "//third_party/skia/src/core/SkScan_Path.cpp",
 +
 +    # TODO: Enable them
++    "//third_party/skia/src/core/SkBitmapProcState_matrixProcs.cpp",
 +    "//third_party/skia/src/core/SkBitmapProcState_opts_ssse3.cpp",
 +    "//third_party/skia/src/core/SkBlitMask_opts_ssse3.cpp",
 +    "//third_party/skia/src/core/SkBlitRow_opts_hsw.cpp",

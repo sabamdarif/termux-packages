@@ -225,10 +225,11 @@ index 548abd4a68..1b7675f724 100644
      "//content/browser/download:proto",
      "//content/browser/file_system_access:proto",
      "//content/browser/indexed_db:internals_mojo_bindings",
-@@ -344,6 +452,7 @@ source_set("browser") {
+@@ -344,7 +452,8 @@ source_set("browser") {
      "//ui/webui/resources",
      "//v8",
      "//v8:v8_version",
+     "//electron/build/config:generate_mas_config",
 +    ":devtools_protocol",
    ]
  
