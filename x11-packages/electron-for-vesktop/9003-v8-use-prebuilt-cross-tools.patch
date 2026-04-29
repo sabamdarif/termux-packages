@@ -17,7 +17,7 @@
 +if (false) {
 +    arg0_prefix = "./"
 +} else {
-+    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-code-oss/"
++    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-vesktop/"
 +}
 +
      args = [
@@ -37,7 +37,7 @@
 +if (false) {
 +  arg0_prefix = "./"
 +} else {
-+  arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-code-oss/"
++  arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-vesktop/"
 +}
 +
    args = [
@@ -80,7 +80,7 @@
 +if (false) {
 +    arg0_prefix = "./"
 +} else {
-+    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-code-oss/"
++    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-vesktop/"
 +}
  
      args += [
@@ -104,7 +104,7 @@
 +if (false) {
 +    arg0_prefix = "./"
 +} else {
-+    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-code-oss/"
++    arg0_prefix = "@TERMUX_PREFIX@/opt/electron-host-tools-for-vesktop/"
 +}
 +
      args = [
