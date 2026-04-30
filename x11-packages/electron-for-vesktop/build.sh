@@ -8,7 +8,7 @@ TERMUX_PKG_SRCURL=git+https://github.com/electron/electron
 TERMUX_PKG_DEPENDS="atk, cups, dbus, fontconfig, gtk3, krb5, libc++, libevdev, libxkbcommon, libminizip, libnss, libx11, mesa, openssl, pango, pulseaudio, zlib"
 TERMUX_PKG_BUILD_DEPENDS="electron-host-tools-for-vesktop, libnotify, libffi-static"
 # Chromium doesn't support i686 on Linux.
-TERMUX_PKG_EXCLUDED_ARCHES="i686"
+TERMUX_PKG_EXCLUDED_ARCHES="i686, x86_64"
 TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_ON_DEVICE_BUILD_NOT_SUPPORTED=true
 
@@ -21,6 +21,38 @@ __tur_setup_depot_tools() {
 	export PATH="$TERMUX_PKG_CACHEDIR/depot_tools:$PATH"
 	export CHROMIUM_BUILDTOOLS_PATH="$TERMUX_PKG_SRCDIR/buildtools"
 	$TERMUX_PKG_CACHEDIR/depot_tools/ensure_bootstrap
+}
+
+__fetch_prebuilt_build_deps() {
+	local _base_url="https://github.com/MdarifSaba/termux-packages/releases/download/vesktop"
+	local _ver="$TERMUX_PKG_VERSION"
+	local _arch="$TERMUX_ARCH"
+
+	declare -A _sha256=(
+		[electron-host-tools-for-vesktop:aarch64]="8112c3df566e232d1782049c1a8bb3e86ac402dd32e9bc82c42ecd0567723241"
+		[electron-host-tools-for-vesktop:arm]="SKIP_CHECKSUM"
+	)
+
+	local _deb="electron-host-tools-for-vesktop_${_ver}_${_arch}.deb"
+	local _deb_path="$TERMUX_PKG_CACHEDIR/${_deb}"
+	local _sum="${_sha256[electron-host-tools-for-vesktop:${_arch}]}"
+
+	echo "Fetching prebuilt build-dep: $_deb"
+	termux_download \
+		"${_base_url}/${_deb}" \
+		"${_deb_path}" \
+		"${_sum}"
+
+	echo "Extracting electron-host-tools-for-vesktop into prefix..."
+	ar p "${_deb_path}" data.tar.xz | \
+		tar xJ \
+			--no-overwrite-dir \
+			--transform='s#^.$#data#' \
+			-C /
+
+	mkdir -p "$TERMUX_BUILT_PACKAGES_DIRECTORY"
+	echo "$_ver" > "$TERMUX_BUILT_PACKAGES_DIRECTORY/electron-host-tools-for-vesktop"
+	echo "Registered electron-host-tools-for-vesktop@${_ver} as built."
 }
 
 termux_step_get_source() {
@@ -79,6 +111,10 @@ termux_step_post_get_source() {
 
 	# Install version file
 	echo "$TERMUX_PKG_VERSION" >$TERMUX_PKG_SRCDIR/electron/ELECTRON_VERSION
+
+	# Download pre-built build deps from GitHub releases and register them so
+	# termux_step_get_dependencies does not attempt to build them from source.
+	__fetch_prebuilt_build_deps
 }
 
 termux_step_configure() {
