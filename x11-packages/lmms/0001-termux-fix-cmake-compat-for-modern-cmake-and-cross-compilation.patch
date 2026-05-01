@@ -1,0 +1,83 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b56a8c0..3cbac82 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -7,11 +7,6 @@ SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" ${CMAKE_MODULE_PATH})
+ IF(COMMAND CMAKE_POLICY)
+ 	CMAKE_POLICY(SET CMP0005 NEW)
+ 	CMAKE_POLICY(SET CMP0003 NEW)
+-	IF (CMAKE_MAJOR_VERSION GREATER 2)
+-		CMAKE_POLICY(SET CMP0026 OLD)
+-		CMAKE_POLICY(SET CMP0045 NEW)
+-		CMAKE_POLICY(SET CMP0050 OLD)
+-	ENDIF()
+ ENDIF(COMMAND CMAKE_POLICY)
+ 
+ INCLUDE(AddFileDependencies)
+@@ -532,15 +527,20 @@ IF(GIT_FOUND AND NOT CONTRIBUTORS)
+ ENDIF()
+ 
+ # embedded resources stuff
+-IF(WIN32 OR WIN64)
++IF(CMAKE_CROSSCOMPILING AND NOT WIN32)
++	# When cross-compiling (e.g. Termux), use host-built bin2res from cache
++	IF(NOT BIN2RES)
++		find_program(BIN2RES bin2res REQUIRED)
++	ENDIF()
++ELSEIF(WIN32 OR WIN64)
+ 	# compile buildtools native
+ 	SET(BIN2RES_CPP "${CMAKE_SOURCE_DIR}/buildtools/bin2res.cpp")
+ 	SET(BIN2RES "${CMAKE_BINARY_DIR}/bin2res")
+ 	ADD_CUSTOM_TARGET(bin2res COMMAND g++ "\"${BIN2RES_CPP}\"" -o "\"${BIN2RES}\"" DEPENDS "${BIN2RES_CPP}")
+-ELSE(WIN32 OR WIN64)
++ELSE()
+ 	ADD_EXECUTABLE(bin2res buildtools/bin2res.cpp)
+-	GET_TARGET_PROPERTY(BIN2RES bin2res LOCATION)
+-ENDIF(WIN32 OR WIN64)
++	SET(BIN2RES "$<TARGET_FILE:bin2res>")
++ENDIF()
+ 
+ # we somehow have to make LMMS-binary depend on MOC-files
+ ADD_FILE_DEPENDENCIES("${CMAKE_BINARY_DIR}/lmmsconfig.h")
+diff --git a/cmake/modules/BuildPlugin.cmake b/cmake/modules/BuildPlugin.cmake
+index f69fafe..da2b876 100644
+--- a/cmake/modules/BuildPlugin.cmake
++++ b/cmake/modules/BuildPlugin.cmake
+@@ -26,10 +26,16 @@ MACRO(BUILD_PLUGIN PLUGIN_NAME)
+ 		SET(PLUGIN_EMBEDDED_RESOURCES ${NEW_ARGS})
+ 
+ 		SET(ER_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_resources.h")
+-		ADD_CUSTOM_COMMAND(OUTPUT ${ER_H}
+-			COMMAND ${BIN2RES}
+-			ARGS ${PLUGIN_EMBEDDED_RESOURCES} > "${ER_H}"
+-			DEPENDS bin2res)
++		IF(CMAKE_CROSSCOMPILING AND NOT WIN32)
++			ADD_CUSTOM_COMMAND(OUTPUT ${ER_H}
++				COMMAND ${BIN2RES}
++				ARGS ${PLUGIN_EMBEDDED_RESOURCES} > "${ER_H}")
++		ELSE()
++			ADD_CUSTOM_COMMAND(OUTPUT ${ER_H}
++				COMMAND ${BIN2RES}
++				ARGS ${PLUGIN_EMBEDDED_RESOURCES} > "${ER_H}"
++				DEPENDS bin2res)
++		ENDIF()
+ 	ENDIF(ER_LEN)
+ 
+ 	IF(QT5)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b18fa89..1324334 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -45,7 +45,11 @@ ENDIF()
+ 
+ SET(lmms_EMBEDDED_RESOURCES "${CMAKE_SOURCE_DIR}/doc/AUTHORS" "${CMAKE_SOURCE_DIR}/LICENSE.txt" "${CONTRIBUTORS}")
+ SET(LMMS_ER_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_resources.h")
+-ADD_CUSTOM_COMMAND(OUTPUT "${LMMS_ER_H}" COMMAND "${BIN2RES}" ARGS ${lmms_EMBEDDED_RESOURCES} > "${LMMS_ER_H}" DEPENDS bin2res)
++IF(CMAKE_CROSSCOMPILING AND NOT WIN32)
++	ADD_CUSTOM_COMMAND(OUTPUT "${LMMS_ER_H}" COMMAND "${BIN2RES}" ARGS ${lmms_EMBEDDED_RESOURCES} > "${LMMS_ER_H}")
++ELSE()
++	ADD_CUSTOM_COMMAND(OUTPUT "${LMMS_ER_H}" COMMAND "${BIN2RES}" ARGS ${lmms_EMBEDDED_RESOURCES} > "${LMMS_ER_H}" DEPENDS bin2res)
++ENDIF()
+ 
+ # Paths relative to lmms executable
+ FILE(RELATIVE_PATH LIB_DIR_RELATIVE "/${BIN_DIR}" "/${LIB_DIR}")
