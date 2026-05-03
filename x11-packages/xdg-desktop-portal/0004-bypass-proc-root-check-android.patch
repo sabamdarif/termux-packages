@@ -1,0 +1,21 @@
+--- a/src/xdp-app-info-flatpak.c
++++ b/src/xdp-app-info-flatpak.c
+@@ -669,6 +669,11 @@
+             }
+         }
+ 
++#ifdef __ANDROID__
++      g_set_error (error, XDP_APP_INFO_ERROR, XDP_APP_INFO_ERROR_WRONG_APP_KIND,
++                   "Not a flatpak (cannot open /proc/pid/root on Android)");
++      return -1;
++#else
+       /* Otherwise, we should be able to open the root dir. Probably the app died and
+          we're failing due to /proc/$pid not existing. In that case fail instead
+          of treating this as privileged. */
+@@ -675,5 +680,6 @@
+                    "Unable to open %s", root_path);
+       return -1;
++#endif
+     }
+ 
+   info_fd = openat (root_fd, ".flatpak-info", O_RDONLY | O_CLOEXEC | O_NOCTTY);

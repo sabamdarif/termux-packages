@@ -3,6 +3,7 @@ TERMUX_PKG_DESCRIPTION="Desktop integration portals for sandboxed apps"
 TERMUX_PKG_LICENSE="LGPL-2.1-or-later"
 TERMUX_PKG_MAINTAINER="@termux"
 TERMUX_PKG_VERSION="1.20.4"
+TERMUX_PKG_REVISION=1
 TERMUX_PKG_SRCURL="https://github.com/flatpak/xdg-desktop-portal/releases/download/${TERMUX_PKG_VERSION}/xdg-desktop-portal-${TERMUX_PKG_VERSION}.tar.xz"
 TERMUX_PKG_SHA256=9528eb3b060b88ac82f294fbdc6af5f4d3adfa42575f2cd816cab3d3e0a7a68c
 TERMUX_PKG_AUTO_UPDATE=true
