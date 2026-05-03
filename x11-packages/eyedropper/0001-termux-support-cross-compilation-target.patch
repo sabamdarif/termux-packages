@@ -1,0 +1,36 @@
+diff --git a/meson_options.txt b/meson_options.txt
+index faff371..18c138e 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -8,3 +8,5 @@ option(
+   value: 'default',
+   description: 'The build profile for Eyedropper. One of "default" or "development".'
+ )
++
++option('cross_target', type: 'string', value: '', description: 'Cargo cross compilation target')
+diff --git a/src/meson.build b/src/meson.build
+index 34864ec..d430907 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -31,6 +31,13 @@ else
+   message('Building in debug mode')
+ endif
+ 
++cross_target = get_option('cross_target')
++if cross_target != ''
++  rust_target_dir = cross_target / rust_target
++else
++  rust_target_dir = rust_target
++endif
++
+ cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
+ 
+ cargo_build = custom_target(
+@@ -48,6 +55,6 @@ cargo_build = custom_target(
+     cargo, 'build',
+     cargo_options,
+     '&&',
+-    'cp', 'src' / rust_target / meson.project_name(), '@OUTPUT@',
++    'cp', 'src' / rust_target_dir / meson.project_name(), '@OUTPUT@',
+   ]
+ )
