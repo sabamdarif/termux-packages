@@ -12,12 +12,7 @@
   </class>
   <class name="AscDirectoryUnit" get-type="asc_directory_unit_get_type" parents="AscUnit,GObject">
   </class>
-  <enum name="AscCanvasError" get-type="asc_canvas_error_get_type">
-    <member name="ASC_CANVAS_ERROR_FAILED" nick="failed" value="0"/>
-    <member name="ASC_CANVAS_ERROR_DRAWING" nick="drawing" value="1"/>
-    <member name="ASC_CANVAS_ERROR_FONT" nick="font" value="2"/>
-    <member name="ASC_CANVAS_ERROR_UNSUPPORTED" nick="unsupported" value="3"/>
-  </enum>  <flags name="AscComposeFlags" get-type="asc_compose_flags_get_type">
+  <flags name="AscComposeFlags" get-type="asc_compose_flags_get_type">
     <member name="ASC_COMPOSE_FLAG_NONE" nick="none" value="0"/>
     <member name="ASC_COMPOSE_FLAG_USE_THREADS" nick="use-threads" value="1"/>
     <member name="ASC_COMPOSE_FLAG_ALLOW_NET" nick="allow-net" value="2"/>
@@ -68,9 +63,6 @@
     <member name="ASC_IMAGE_ERROR_UNSUPPORTED" nick="unsupported" value="1"/>
   </enum>  <class name="AscImage" get-type="asc_image_get_type" parents="GObject">
   </class>
-  <class name="AscCanvas" get-type="asc_canvas_get_type" parents="GObject">
-  </class>
   <error-quark function="asc_compose_error_quark" domain="AscComposeError"/>
   <error-quark function="asc_image_error_quark" domain="AscImageError"/>
-  <error-quark function="asc_canvas_error_quark" domain="AscCanvasError"/>
 </dump>

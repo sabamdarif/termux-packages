@@ -1,0 +1,148 @@
+diff --git a/compose/asc-compose.c b/compose/asc-compose.c
+index dc8aa0d..b01ebf5 100644
+--- a/compose/asc-compose.c
++++ b/compose/asc-compose.c
+@@ -95,7 +95,7 @@ asc_compose_init (AscCompose *compose)
+ 
+ 	/* defaults */
+ 	priv->format = AS_FORMAT_KIND_XML;
+-	as_ref_string_assign_safe (&priv->prefix, "/usr");
++	as_ref_string_assign_safe (&priv->prefix, "@TERMUX_PREFIX@");
+ 	priv->min_l10n_percentage = 25;
+ 	priv->max_scr_size_bytes = -1;
+ 	priv->flags = ASC_COMPOSE_FLAG_USE_THREADS | ASC_COMPOSE_FLAG_ALLOW_NET |
+diff --git a/src/as-cache.c b/src/as-cache.c
+index e397339..f108dea 100644
+--- a/src/as-cache.c
++++ b/src/as-cache.c
+@@ -66,7 +66,7 @@ G_DEFINE_TYPE_WITH_PRIVATE (AsCache, as_cache, G_TYPE_OBJECT)
+ #define GET_PRIVATE(o) (as_cache_get_instance_private (o))
+ 
+ /* location of the system-wide cache */
+-static const gchar *AS_APPSTREAM_SYS_CACHE_DIR = "/var/cache/swcatalog/cache";
++static const gchar *AS_APPSTREAM_SYS_CACHE_DIR = "@TERMUX_PREFIX@/var/cache/swcatalog/cache";
+ 
+ typedef struct {
+ 	gboolean is_os_data;
+@@ -176,7 +176,7 @@ as_cache_init (AsCache *cache)
+ 		if (priv->cache_root_dir == NULL) {
+ 			g_critical ("Failed to obtain user cache directory: %s",
+ 				    tmp_error->message);
+-			priv->cache_root_dir = g_strdup ("/tmp");
++			priv->cache_root_dir = g_strdup ("@TERMUX_PREFIX@/tmp");
+ 		}
+ 	}
+ 
+diff --git a/src/as-pool.c b/src/as-pool.c
+index edd571c..e97643e 100644
+--- a/src/as-pool.c
++++ b/src/as-pool.c
+@@ -103,16 +103,16 @@ static guint signals[SIGNAL_LAST] = { 0 };
+ /* Prefixes of locations where system-wide AppStream catalog metadata can be found.
+  * TODO: We should really parse $XDG_DATA_DIRS for the /usr location in a safe way,
+  * instead of hardcoding one canonical path here. */
+-static const gchar *SYSTEM_CATALOG_METADATA_PREFIXES[] = { "/usr/share",
+-							   "/var/lib",
+-							   "/var/cache",
++static const gchar *SYSTEM_CATALOG_METADATA_PREFIXES[] = { "@TERMUX_PREFIX@/share",
++							   "@TERMUX_PREFIX@/var/lib",
++							   "@TERMUX_PREFIX@/var/cache",
+ 							   NULL };
+ 
+ /* where .desktop files are installed to by packages to be registered with the system */
+-static gchar *APPLICATIONS_DIR = "/usr/share/applications";
++static gchar *APPLICATIONS_DIR = "@TERMUX_PREFIX@/share/applications";
+ 
+ /* where metainfo files can be found */
+-static gchar *METAINFO_DIR = "/usr/share/metainfo";
++static gchar *METAINFO_DIR = "@TERMUX_PREFIX@/share/metainfo";
+ 
+ /* cache key used for local metainfo / desktop-entry data */
+ static gchar *LOCAL_METAINFO_CACHE_KEY = "local-metainfo";
+diff --git a/src/as-system-info.c b/src/as-system-info.c
+index 2967bae..9dcf7f0 100644
+--- a/src/as-system-info.c
++++ b/src/as-system-info.c
+@@ -223,6 +223,11 @@ as_system_info_load_os_release (AsSystemInfo *sysinfo, const gchar *os_release_f
+ 	g_autoptr(GError) error = NULL;
+ 	gchar *line;
+ 
++	priv->os_id = g_strdup("termux");
++	priv->os_name = g_strdup("Termux");
++	priv->os_version = g_strdup("N/A");
++	priv->os_homepage = g_strdup("https://termux.dev/");
++
+ 	/* skip if we already loaded data */
+ 	if (priv->os_id != NULL)
+ 		return;
+diff --git a/src/as-utils.c b/src/as-utils.c
+index 0d34406..3123ee1 100644
+--- a/src/as-utils.c
++++ b/src/as-utils.c
+@@ -643,6 +643,8 @@ as_utils_is_root (void)
+ 	}
+ 
+ 	return is_admin;
++#elif defined(__ANDROID__)
++	return TRUE;
+ #else
+ 	uid_t vuid;
+ 	vuid = getuid ();
+@@ -2409,11 +2411,11 @@ static const gchar *
+ as_metadata_location_get_prefix (AsMetadataLocation location)
+ {
+ 	if (location == AS_METADATA_LOCATION_SHARED)
+-		return "/usr/share";
++		return "@TERMUX_PREFIX@/share";
+ 	if (location == AS_METADATA_LOCATION_CACHE)
+-		return "/var/cache";
++		return "@TERMUX_PREFIX@/var/cache";
+ 	if (location == AS_METADATA_LOCATION_STATE)
+-		return "/var/lib";
++		return "@TERMUX_PREFIX@/var/lib";
+ 	if (location == AS_METADATA_LOCATION_USER)
+ 		return g_get_user_data_dir ();
+ 	return NULL;
+diff --git a/tools/appstream-compose.c b/tools/appstream-compose.c
+index b73d939..3d959c2 100644
+--- a/tools/appstream-compose.c
++++ b/tools/appstream-compose.c
+@@ -383,7 +383,7 @@ main (int argc, char **argv)
+ 
+ 	/* sanity checks & defaults */
+ 	if (prefix == NULL)
+-		prefix = g_strdup ("/usr");
++		prefix = g_strdup ("@TERMUX_PREFIX@");
+ 	asc_compose_set_prefix (compose, prefix);
+ 
+ 	if (res_root_dir == NULL && (mdata_dir == NULL || icons_dir == NULL)) {
+diff --git a/tools/ascli-actions-pkgmgr.c b/tools/ascli-actions-pkgmgr.c
+index 46d67ad..e49d6ae 100644
+--- a/tools/ascli-actions-pkgmgr.c
++++ b/tools/ascli-actions-pkgmgr.c
+@@ -42,12 +42,12 @@ exec_pm_action (const gchar *action, gchar **pkgnames)
+ 	g_auto(GStrv) cmd = NULL;
+ 
+ #ifdef HAVE_APT_SUPPORT
+-	if (g_file_test ("/usr/bin/apt", G_FILE_TEST_EXISTS))
+-		exe = "/usr/bin/apt";
++	if (g_file_test ("@TERMUX_PREFIX@/bin/apt", G_FILE_TEST_EXISTS))
++		exe = "@TERMUX_PREFIX@/bin/apt";
+ #endif
+ 	if (exe == NULL) {
+-		if (g_file_test ("/usr/bin/pkgcli", G_FILE_TEST_EXISTS)) {
+-			exe = "/usr/bin/pkgcli";
++		if (g_file_test ("@TERMUX_PREFIX@/bin/pkcon", G_FILE_TEST_EXISTS)) {
++			exe = "@TERMUX_PREFIX@/bin/pkcon";
+ 		} else {
+ 			g_printerr ("%s\n",
+ 				    _("No suitable package manager tool found. Please make sure that e.g. \"pkgcli\" (part of PackageKit) is available."));
+@@ -80,7 +80,7 @@ exec_flatpak_action (const gchar *action, const gchar *bundle_id)
+ 	const gchar *exe = NULL;
+ 	g_auto(GStrv) cmd = NULL;
+ 
+-	exe = "/usr/bin/flatpak";
++	exe = "@TERMUX_PREFIX@/bin/flatpak";
+ 	if (!g_file_test (exe, G_FILE_TEST_EXISTS)) {
+ 		g_printerr ("%s\n", _("Flatpak was not found! Please install it to continue."));
+ 		return ASCLI_EXIT_CODE_FAILED;
