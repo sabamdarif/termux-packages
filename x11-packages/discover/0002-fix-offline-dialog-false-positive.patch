@@ -1,0 +1,13 @@
+diff --git a/discover/qml/DiscoverWindow.qml b/discover/qml/DiscoverWindow.qml
+index f2c00c7..c4c76c7 100644
+--- a/discover/qml/DiscoverWindow.qml
++++ b/discover/qml/DiscoverWindow.qml
+@@ -48,7 +48,7 @@ Kirigami.ApplicationWindow {
+             messagesSheet.addMessage(i18n("Running as <em>root</em> is discouraged and unnecessary."));
+         }
+ 
+-        if (NetworkInformation.reachability !== NetworkInformation.Reachability.Online) {
++        if (NetworkInformation.reachability === NetworkInformation.Reachability.Disconnected) {
+             connectionDialog.open();
+         }
+     }

@@ -1,0 +1,26 @@
+diff --git a/discover/FeaturedModel.cpp b/discover/FeaturedModel.cpp
+index b68e4aa..198a9ee 100644
+--- a/discover/FeaturedModel.cpp
++++ b/discover/FeaturedModel.cpp
+@@ -27,7 +27,7 @@ Q_GLOBAL_STATIC(QString, featuredCache)
+ 
+ static QUrl featuredURL()
+ {
+-    QString config = QStringLiteral("/usr/share/discover/featuredurlrc");
++    QString config = QStringLiteral("@TERMUX_PREFIX@/share/discover/featuredurlrc");
+     KConfigGroup grp(KSharedConfig::openConfig(config), u"Software"_s);
+     if (grp.hasKey("FeaturedListingURL")) {
+         return grp.readEntry("FeaturedListingURL", QUrl());
+diff --git a/libdiscover/backends/PackageKitBackend/PackageKitUpdater.cpp b/libdiscover/backends/PackageKitBackend/PackageKitUpdater.cpp
+index 884f17f..a70d589 100644
+--- a/libdiscover/backends/PackageKitBackend/PackageKitUpdater.cpp
++++ b/libdiscover/backends/PackageKitBackend/PackageKitUpdater.cpp
+@@ -373,7 +373,7 @@ void PackageKitUpdater::prepare()
+ 
+ void PackageKitUpdater::checkFreeSpace()
+ {
+-    auto job = KIO::fileSystemFreeSpace(QUrl::fromLocalFile(QStringLiteral("/usr")));
++    auto job = KIO::fileSystemFreeSpace(QUrl::fromLocalFile(QStringLiteral("@TERMUX_PREFIX@")));
+     connect(job, &KJob::result, this, [this, job]() {
+         if (job->availableSize() < updateSize()) {
+             setErrorMessage(i18nc("@info:status %1 is a formatted disk space string e.g. '240 MiB'",
