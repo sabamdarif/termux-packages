@@ -1,0 +1,577 @@
+<?xml version="1.0"?>
+<dump>
+  <class name="PkSource" get-type="pk_source_get_type" parents="GObject">
+    <property name="role" type="PkRoleEnum" flags="227" default-value="PK_ROLE_ENUM_UNKNOWN"/>
+    <property name="transaction-id" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkPackage" get-type="pk_package_get_type" parents="PkSource,GObject">
+    <property name="info" type="PkInfoEnum" flags="227" default-value="PK_INFO_ENUM_UNKNOWN"/>
+    <property name="package-id" type="gchararray" flags="225" default-value="NULL"/>
+    <property name="summary" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="license" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="group" type="PkGroupEnum" flags="227" default-value="PK_GROUP_ENUM_UNKNOWN"/>
+    <property name="description" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="url" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="size" type="guint64" flags="227" default-value="0"/>
+    <property name="update-updates" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-obsoletes" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-vendor-urls" type="GStrv" flags="227"/>
+    <property name="update-bugzilla-urls" type="GStrv" flags="227"/>
+    <property name="update-cve-urls" type="GStrv" flags="227"/>
+    <property name="update-restart" type="PkRestartEnum" flags="227" default-value="PK_RESTART_ENUM_UNKNOWN"/>
+    <property name="update-text" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-changelog" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-state" type="PkUpdateStateEnum" flags="227" default-value="PK_UPDATE_STATE_ENUM_UNKNOWN"/>
+    <property name="update-issued" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-updated" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="update-severity" type="PkInfoEnum" flags="1073742051" default-value="PK_INFO_ENUM_UNKNOWN"/>
+    <signal name="changed" return="void" when="last">
+    </signal>
+  </class>
+  <class name="PkItemProgress" get-type="pk_item_progress_get_type" parents="PkSource,GObject">
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="status" type="guint" flags="227" default-value="0"/>
+    <property name="percentage" type="guint" flags="227" default-value="0"/>
+  </class>
+  <class name="PkProgress" get-type="pk_progress_get_type" parents="GObject">
+    <property name="package-id" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="transaction-id" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="percentage" type="gint" flags="1073742051" default-value="-1"/>
+    <property name="allow-cancel" type="gboolean" flags="1073742051" default-value="FALSE"/>
+    <property name="role" type="guint" flags="1073742051" default-value="0"/>
+    <property name="status" type="guint" flags="1073742051" default-value="0"/>
+    <property name="caller-active" type="gboolean" flags="1073742051" default-value="FALSE"/>
+    <property name="elapsed-time" type="guint" flags="1073742051" default-value="0"/>
+    <property name="remaining-time" type="guint" flags="1073742051" default-value="0"/>
+    <property name="speed" type="guint" flags="1073742051" default-value="0"/>
+    <property name="download-size-remaining" type="guint64" flags="1073742051" default-value="0"/>
+    <property name="transaction-flags" type="guint64" flags="1073742051" default-value="0"/>
+    <property name="uid" type="guint" flags="1073742051" default-value="0"/>
+    <property name="sender" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="package" type="PkPackage" flags="1073742051"/>
+    <property name="item-progress" type="PkItemProgress" flags="1073742051"/>
+  </class>
+  <class name="PkPackageSack" get-type="pk_package_sack_get_type" parents="GObject">
+  </class>
+  <class name="PkCategory" get-type="pk_category_get_type" parents="PkSource,GObject">
+    <property name="parent-id" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="cat-id" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="name" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="summary" type="gchararray" flags="1073742051" default-value="NULL"/>
+    <property name="icon" type="gchararray" flags="1073742051" default-value="NULL"/>
+  </class>
+  <class name="PkDetails" get-type="pk_details_get_type" parents="PkSource,GObject">
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="license" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="group" type="PkGroupEnum" flags="227" default-value="PK_GROUP_ENUM_UNKNOWN"/>
+    <property name="description" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="url" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="size" type="guint64" flags="227" default-value="0"/>
+    <property name="summary" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="download-size" type="guint64" flags="227" default-value="18446744073709551615"/>
+  </class>
+  <class name="PkDistroUpgrade" get-type="pk_distro_upgrade_get_type" parents="PkSource,GObject">
+    <property name="state" type="PkDistroUpgradeEnum" flags="227" default-value="PK_DISTRO_UPGRADE_ENUM_UNKNOWN"/>
+    <property name="name" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="summary" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkError" get-type="pk_error_get_type" parents="PkSource,GObject">
+    <property name="code" type="PkErrorEnum" flags="227" default-value="PK_ERROR_ENUM_UNKNOWN"/>
+    <property name="details" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkEulaRequired" get-type="pk_eula_required_get_type" parents="PkSource,GObject">
+    <property name="eula-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="vendor-name" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="license-agreement" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkFiles" get-type="pk_files_get_type" parents="PkSource,GObject">
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="files" type="GStrv" flags="227"/>
+  </class>
+  <class name="PkMediaChangeRequired" get-type="pk_media_change_required_get_type" parents="PkSource,GObject">
+    <property name="media-type" type="PkMediaTypeEnum" flags="227" default-value="PK_MEDIA_TYPE_ENUM_UNKNOWN"/>
+    <property name="media-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="media-text" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkRepoDetail" get-type="pk_repo_detail_get_type" parents="PkSource,GObject">
+    <property name="repo-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="description" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="enabled" type="gboolean" flags="227" default-value="FALSE"/>
+  </class>
+  <class name="PkRepoSignatureRequired" get-type="pk_repo_signature_required_get_type" parents="PkSource,GObject">
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="repository-name" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="key-url" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="key-userid" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="key-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="key-fingerprint" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="key-timestamp" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="type" type="PkSigTypeEnum" flags="227" default-value="PK_SIGTYPE_ENUM_UNKNOWN"/>
+  </class>
+  <class name="PkRequireRestart" get-type="pk_require_restart_get_type" parents="PkSource,GObject">
+    <property name="restart" type="PkRestartEnum" flags="227" default-value="PK_RESTART_ENUM_UNKNOWN"/>
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkTransactionPast" get-type="pk_transaction_past_get_type" parents="PkSource,GObject">
+    <property name="tid" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="timespec" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="succeeded" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="role" type="PkRoleEnum" flags="227" default-value="PK_ROLE_ENUM_UNKNOWN"/>
+    <property name="duration" type="guint" flags="227" default-value="0"/>
+    <property name="data" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="uid" type="guint" flags="227" default-value="4294967295"/>
+    <property name="cmdline" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkUpdateDetail" get-type="pk_update_detail_get_type" parents="PkSource,GObject">
+    <property name="package-id" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="updates" type="GStrv" flags="227"/>
+    <property name="obsoletes" type="GStrv" flags="227"/>
+    <property name="vendor-urls" type="GStrv" flags="227"/>
+    <property name="bugzilla-urls" type="GStrv" flags="227"/>
+    <property name="cve-urls" type="GStrv" flags="227"/>
+    <property name="restart" type="PkRestartEnum" flags="227" default-value="PK_RESTART_ENUM_UNKNOWN"/>
+    <property name="update-text" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="changelog" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="state" type="PkUpdateStateEnum" flags="227" default-value="PK_UPDATE_STATE_ENUM_UNKNOWN"/>
+    <property name="issued" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="updated" type="gchararray" flags="227" default-value="NULL"/>
+  </class>
+  <class name="PkResults" get-type="pk_results_get_type" parents="GObject">
+    <property name="role" type="PkRoleEnum" flags="227" default-value="PK_ROLE_ENUM_UNKNOWN"/>
+    <property name="transaction-flags" type="guint64" flags="227" default-value="0"/>
+    <property name="inputs" type="guint" flags="227" default-value="0"/>
+    <property name="progress" type="PkProgress" flags="227"/>
+  </class>
+  <class name="PkClient" get-type="pk_client_get_type" parents="GObject">
+    <property name="locale" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="background" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="interactive" type="gboolean" flags="227" default-value="TRUE"/>
+    <property name="idle" type="gboolean" flags="225" default-value="TRUE"/>
+    <property name="cache-age" type="guint" flags="227" default-value="4294967295"/>
+    <property name="details-with-deps-size" type="gboolean" flags="227" default-value="FALSE"/>
+  </class>
+  <class name="PkControl" get-type="pk_control_get_type" parents="GObject">
+    <property name="version-major" type="guint" flags="225" default-value="0"/>
+    <property name="version-minor" type="guint" flags="225" default-value="0"/>
+    <property name="version-micro" type="guint" flags="225" default-value="0"/>
+    <property name="backend-name" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="backend-description" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="backend-author" type="gchararray" flags="227" default-value="NULL"/>
+    <property name="roles" type="guint64" flags="227" default-value="0"/>
+    <property name="groups" type="guint64" flags="227" default-value="0"/>
+    <property name="filters" type="guint64" flags="227" default-value="0"/>
+    <property name="provides" type="guint64" flags="227" default-value="0"/>
+    <property name="mime-types" type="GStrv" flags="227"/>
+    <property name="locked" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="network-state" type="PkNetworkEnum" flags="227" default-value="PK_NETWORK_ENUM_LAST"/>
+    <property name="connected" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="distro-id" type="gchararray" flags="227" default-value="NULL"/>
+    <signal name="installed-changed" return="void" when="last">
+    </signal>
+    <signal name="updates-changed" return="void" when="last">
+    </signal>
+    <signal name="repo-list-changed" return="void" when="last">
+    </signal>
+    <signal name="restart-schedule" return="void" when="last">
+    </signal>
+    <signal name="transaction-list-changed" return="void" when="last">
+      <param type="GStrv"/>
+    </signal>
+  </class>
+  <class name="PkDesktop" get-type="pk_desktop_get_type" parents="GObject">
+  </class>
+  <enum name="PkClientError" get-type="pk_client_error_get_type">
+    <member name="PK_CLIENT_ERROR_FAILED" nick="failed" value="0"/>
+    <member name="PK_CLIENT_ERROR_FAILED_AUTH" nick="failed-auth" value="1"/>
+    <member name="PK_CLIENT_ERROR_NO_TID" nick="no-tid" value="2"/>
+    <member name="PK_CLIENT_ERROR_ALREADY_TID" nick="already-tid" value="3"/>
+    <member name="PK_CLIENT_ERROR_ROLE_UNKNOWN" nick="role-unknown" value="4"/>
+    <member name="PK_CLIENT_ERROR_CANNOT_START_DAEMON" nick="cannot-start-daemon" value="5"/>
+    <member name="PK_CLIENT_ERROR_INVALID_INPUT" nick="invalid-input" value="6"/>
+    <member name="PK_CLIENT_ERROR_INVALID_FILE" nick="invalid-file" value="7"/>
+    <member name="PK_CLIENT_ERROR_NOT_SUPPORTED" nick="not-supported" value="8"/>
+    <member name="PK_CLIENT_ERROR_DECLINED_SIMULATION" nick="declined-simulation" value="9"/>
+    <member name="PK_CLIENT_ERROR_DECLINED_INTERACTION" nick="declined-interaction" value="10"/>
+    <member name="PK_CLIENT_ERROR_LAST" nick="last" value="11"/>
+  </enum>  <enum name="PkControlError" get-type="pk_control_error_get_type">
+    <member name="PK_CONTROL_ERROR_FAILED" nick="failed" value="0"/>
+    <member name="PK_CONTROL_ERROR_CANNOT_START_DAEMON" nick="cannot-start-daemon" value="1"/>
+  </enum>  <enum name="PkRoleEnum" get-type="pk_role_enum_get_type">
+    <member name="PK_ROLE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_ROLE_ENUM_CANCEL" nick="cancel" value="1"/>
+    <member name="PK_ROLE_ENUM_DEPENDS_ON" nick="depends-on" value="2"/>
+    <member name="PK_ROLE_ENUM_GET_DETAILS" nick="get-details" value="3"/>
+    <member name="PK_ROLE_ENUM_GET_FILES" nick="get-files" value="4"/>
+    <member name="PK_ROLE_ENUM_GET_PACKAGES" nick="get-packages" value="5"/>
+    <member name="PK_ROLE_ENUM_GET_REPO_LIST" nick="get-repo-list" value="6"/>
+    <member name="PK_ROLE_ENUM_REQUIRED_BY" nick="required-by" value="7"/>
+    <member name="PK_ROLE_ENUM_GET_UPDATE_DETAIL" nick="get-update-detail" value="8"/>
+    <member name="PK_ROLE_ENUM_GET_UPDATES" nick="get-updates" value="9"/>
+    <member name="PK_ROLE_ENUM_INSTALL_FILES" nick="install-files" value="10"/>
+    <member name="PK_ROLE_ENUM_INSTALL_PACKAGES" nick="install-packages" value="11"/>
+    <member name="PK_ROLE_ENUM_INSTALL_SIGNATURE" nick="install-signature" value="12"/>
+    <member name="PK_ROLE_ENUM_REFRESH_CACHE" nick="refresh-cache" value="13"/>
+    <member name="PK_ROLE_ENUM_REMOVE_PACKAGES" nick="remove-packages" value="14"/>
+    <member name="PK_ROLE_ENUM_REPO_ENABLE" nick="repo-enable" value="15"/>
+    <member name="PK_ROLE_ENUM_REPO_SET_DATA" nick="repo-set-data" value="16"/>
+    <member name="PK_ROLE_ENUM_RESOLVE" nick="resolve" value="17"/>
+    <member name="PK_ROLE_ENUM_SEARCH_DETAILS" nick="search-details" value="18"/>
+    <member name="PK_ROLE_ENUM_SEARCH_FILE" nick="search-file" value="19"/>
+    <member name="PK_ROLE_ENUM_SEARCH_GROUP" nick="search-group" value="20"/>
+    <member name="PK_ROLE_ENUM_SEARCH_NAME" nick="search-name" value="21"/>
+    <member name="PK_ROLE_ENUM_UPDATE_PACKAGES" nick="update-packages" value="22"/>
+    <member name="PK_ROLE_ENUM_WHAT_PROVIDES" nick="what-provides" value="23"/>
+    <member name="PK_ROLE_ENUM_ACCEPT_EULA" nick="accept-eula" value="24"/>
+    <member name="PK_ROLE_ENUM_DOWNLOAD_PACKAGES" nick="download-packages" value="25"/>
+    <member name="PK_ROLE_ENUM_GET_DISTRO_UPGRADES" nick="get-distro-upgrades" value="26"/>
+    <member name="PK_ROLE_ENUM_GET_CATEGORIES" nick="get-categories" value="27"/>
+    <member name="PK_ROLE_ENUM_GET_OLD_TRANSACTIONS" nick="get-old-transactions" value="28"/>
+    <member name="PK_ROLE_ENUM_REPAIR_SYSTEM" nick="repair-system" value="29"/>
+    <member name="PK_ROLE_ENUM_GET_DETAILS_LOCAL" nick="get-details-local" value="30"/>
+    <member name="PK_ROLE_ENUM_GET_FILES_LOCAL" nick="get-files-local" value="31"/>
+    <member name="PK_ROLE_ENUM_REPO_REMOVE" nick="repo-remove" value="32"/>
+    <member name="PK_ROLE_ENUM_UPGRADE_SYSTEM" nick="upgrade-system" value="33"/>
+    <member name="PK_ROLE_ENUM_LAST" nick="last" value="34"/>
+  </enum>  <enum name="PkStatusEnum" get-type="pk_status_enum_get_type">
+    <member name="PK_STATUS_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_STATUS_ENUM_WAIT" nick="wait" value="1"/>
+    <member name="PK_STATUS_ENUM_SETUP" nick="setup" value="2"/>
+    <member name="PK_STATUS_ENUM_RUNNING" nick="running" value="3"/>
+    <member name="PK_STATUS_ENUM_QUERY" nick="query" value="4"/>
+    <member name="PK_STATUS_ENUM_INFO" nick="info" value="5"/>
+    <member name="PK_STATUS_ENUM_REMOVE" nick="remove" value="6"/>
+    <member name="PK_STATUS_ENUM_REFRESH_CACHE" nick="refresh-cache" value="7"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD" nick="download" value="8"/>
+    <member name="PK_STATUS_ENUM_INSTALL" nick="install" value="9"/>
+    <member name="PK_STATUS_ENUM_UPDATE" nick="update" value="10"/>
+    <member name="PK_STATUS_ENUM_CLEANUP" nick="cleanup" value="11"/>
+    <member name="PK_STATUS_ENUM_OBSOLETE" nick="obsolete" value="12"/>
+    <member name="PK_STATUS_ENUM_DEP_RESOLVE" nick="dep-resolve" value="13"/>
+    <member name="PK_STATUS_ENUM_SIG_CHECK" nick="sig-check" value="14"/>
+    <member name="PK_STATUS_ENUM_TEST_COMMIT" nick="test-commit" value="15"/>
+    <member name="PK_STATUS_ENUM_COMMIT" nick="commit" value="16"/>
+    <member name="PK_STATUS_ENUM_REQUEST" nick="request" value="17"/>
+    <member name="PK_STATUS_ENUM_FINISHED" nick="finished" value="18"/>
+    <member name="PK_STATUS_ENUM_CANCEL" nick="cancel" value="19"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_REPOSITORY" nick="download-repository" value="20"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_PACKAGELIST" nick="download-packagelist" value="21"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_FILELIST" nick="download-filelist" value="22"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_CHANGELOG" nick="download-changelog" value="23"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_GROUP" nick="download-group" value="24"/>
+    <member name="PK_STATUS_ENUM_DOWNLOAD_UPDATEINFO" nick="download-updateinfo" value="25"/>
+    <member name="PK_STATUS_ENUM_REPACKAGING" nick="repackaging" value="26"/>
+    <member name="PK_STATUS_ENUM_LOADING_CACHE" nick="loading-cache" value="27"/>
+    <member name="PK_STATUS_ENUM_SCAN_APPLICATIONS" nick="scan-applications" value="28"/>
+    <member name="PK_STATUS_ENUM_GENERATE_PACKAGE_LIST" nick="generate-package-list" value="29"/>
+    <member name="PK_STATUS_ENUM_WAITING_FOR_LOCK" nick="waiting-for-lock" value="30"/>
+    <member name="PK_STATUS_ENUM_WAITING_FOR_AUTH" nick="waiting-for-auth" value="31"/>
+    <member name="PK_STATUS_ENUM_SCAN_PROCESS_LIST" nick="scan-process-list" value="32"/>
+    <member name="PK_STATUS_ENUM_CHECK_EXECUTABLE_FILES" nick="check-executable-files" value="33"/>
+    <member name="PK_STATUS_ENUM_CHECK_LIBRARIES" nick="check-libraries" value="34"/>
+    <member name="PK_STATUS_ENUM_COPY_FILES" nick="copy-files" value="35"/>
+    <member name="PK_STATUS_ENUM_RUN_HOOK" nick="run-hook" value="36"/>
+    <member name="PK_STATUS_ENUM_LAST" nick="last" value="37"/>
+  </enum>  <enum name="PkExitEnum" get-type="pk_exit_enum_get_type">
+    <member name="PK_EXIT_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_EXIT_ENUM_SUCCESS" nick="success" value="1"/>
+    <member name="PK_EXIT_ENUM_FAILED" nick="failed" value="2"/>
+    <member name="PK_EXIT_ENUM_CANCELLED" nick="cancelled" value="3"/>
+    <member name="PK_EXIT_ENUM_KEY_REQUIRED" nick="key-required" value="4"/>
+    <member name="PK_EXIT_ENUM_EULA_REQUIRED" nick="eula-required" value="5"/>
+    <member name="PK_EXIT_ENUM_KILLED" nick="killed" value="6"/>
+    <member name="PK_EXIT_ENUM_MEDIA_CHANGE_REQUIRED" nick="media-change-required" value="7"/>
+    <member name="PK_EXIT_ENUM_NEED_UNTRUSTED" nick="need-untrusted" value="8"/>
+    <member name="PK_EXIT_ENUM_CANCELLED_PRIORITY" nick="cancelled-priority" value="9"/>
+    <member name="PK_EXIT_ENUM_SKIP_TRANSACTION" nick="skip-transaction" value="10"/>
+    <member name="PK_EXIT_ENUM_REPAIR_REQUIRED" nick="repair-required" value="11"/>
+    <member name="PK_EXIT_ENUM_LAST" nick="last" value="12"/>
+  </enum>  <enum name="PkNetworkEnum" get-type="pk_network_enum_get_type">
+    <member name="PK_NETWORK_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_NETWORK_ENUM_OFFLINE" nick="offline" value="1"/>
+    <member name="PK_NETWORK_ENUM_ONLINE" nick="online" value="2"/>
+    <member name="PK_NETWORK_ENUM_WIRED" nick="wired" value="3"/>
+    <member name="PK_NETWORK_ENUM_WIFI" nick="wifi" value="4"/>
+    <member name="PK_NETWORK_ENUM_MOBILE" nick="mobile" value="5"/>
+    <member name="PK_NETWORK_ENUM_LAST" nick="last" value="6"/>
+  </enum>  <enum name="PkFilterEnum" get-type="pk_filter_enum_get_type">
+    <member name="PK_FILTER_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_FILTER_ENUM_NONE" nick="none" value="1"/>
+    <member name="PK_FILTER_ENUM_INSTALLED" nick="installed" value="2"/>
+    <member name="PK_FILTER_ENUM_NOT_INSTALLED" nick="not-installed" value="3"/>
+    <member name="PK_FILTER_ENUM_DEVELOPMENT" nick="development" value="4"/>
+    <member name="PK_FILTER_ENUM_NOT_DEVELOPMENT" nick="not-development" value="5"/>
+    <member name="PK_FILTER_ENUM_GUI" nick="gui" value="6"/>
+    <member name="PK_FILTER_ENUM_NOT_GUI" nick="not-gui" value="7"/>
+    <member name="PK_FILTER_ENUM_FREE" nick="free" value="8"/>
+    <member name="PK_FILTER_ENUM_NOT_FREE" nick="not-free" value="9"/>
+    <member name="PK_FILTER_ENUM_VISIBLE" nick="visible" value="10"/>
+    <member name="PK_FILTER_ENUM_NOT_VISIBLE" nick="not-visible" value="11"/>
+    <member name="PK_FILTER_ENUM_SUPPORTED" nick="supported" value="12"/>
+    <member name="PK_FILTER_ENUM_NOT_SUPPORTED" nick="not-supported" value="13"/>
+    <member name="PK_FILTER_ENUM_BASENAME" nick="basename" value="14"/>
+    <member name="PK_FILTER_ENUM_NOT_BASENAME" nick="not-basename" value="15"/>
+    <member name="PK_FILTER_ENUM_NEWEST" nick="newest" value="16"/>
+    <member name="PK_FILTER_ENUM_NOT_NEWEST" nick="not-newest" value="17"/>
+    <member name="PK_FILTER_ENUM_ARCH" nick="arch" value="18"/>
+    <member name="PK_FILTER_ENUM_NOT_ARCH" nick="not-arch" value="19"/>
+    <member name="PK_FILTER_ENUM_SOURCE" nick="source" value="20"/>
+    <member name="PK_FILTER_ENUM_NOT_SOURCE" nick="not-source" value="21"/>
+    <member name="PK_FILTER_ENUM_COLLECTIONS" nick="collections" value="22"/>
+    <member name="PK_FILTER_ENUM_NOT_COLLECTIONS" nick="not-collections" value="23"/>
+    <member name="PK_FILTER_ENUM_APPLICATION" nick="application" value="24"/>
+    <member name="PK_FILTER_ENUM_NOT_APPLICATION" nick="not-application" value="25"/>
+    <member name="PK_FILTER_ENUM_DOWNLOADED" nick="downloaded" value="26"/>
+    <member name="PK_FILTER_ENUM_NOT_DOWNLOADED" nick="not-downloaded" value="27"/>
+    <member name="PK_FILTER_ENUM_LAST" nick="last" value="28"/>
+  </enum>  <enum name="PkRestartEnum" get-type="pk_restart_enum_get_type">
+    <member name="PK_RESTART_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_RESTART_ENUM_NONE" nick="none" value="1"/>
+    <member name="PK_RESTART_ENUM_APPLICATION" nick="application" value="2"/>
+    <member name="PK_RESTART_ENUM_SESSION" nick="session" value="3"/>
+    <member name="PK_RESTART_ENUM_SYSTEM" nick="system" value="4"/>
+    <member name="PK_RESTART_ENUM_SECURITY_SESSION" nick="security-session" value="5"/>
+    <member name="PK_RESTART_ENUM_SECURITY_SYSTEM" nick="security-system" value="6"/>
+    <member name="PK_RESTART_ENUM_LAST" nick="last" value="7"/>
+  </enum>  <enum name="PkErrorEnum" get-type="pk_error_enum_get_type">
+    <member name="PK_ERROR_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_ERROR_ENUM_OOM" nick="oom" value="1"/>
+    <member name="PK_ERROR_ENUM_NO_NETWORK" nick="no-network" value="2"/>
+    <member name="PK_ERROR_ENUM_NOT_SUPPORTED" nick="not-supported" value="3"/>
+    <member name="PK_ERROR_ENUM_INTERNAL_ERROR" nick="internal-error" value="4"/>
+    <member name="PK_ERROR_ENUM_GPG_FAILURE" nick="gpg-failure" value="5"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_ID_INVALID" nick="package-id-invalid" value="6"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_NOT_INSTALLED" nick="package-not-installed" value="7"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_NOT_FOUND" nick="package-not-found" value="8"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_ALREADY_INSTALLED" nick="package-already-installed" value="9"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_DOWNLOAD_FAILED" nick="package-download-failed" value="10"/>
+    <member name="PK_ERROR_ENUM_GROUP_NOT_FOUND" nick="group-not-found" value="11"/>
+    <member name="PK_ERROR_ENUM_GROUP_LIST_INVALID" nick="group-list-invalid" value="12"/>
+    <member name="PK_ERROR_ENUM_DEP_RESOLUTION_FAILED" nick="dep-resolution-failed" value="13"/>
+    <member name="PK_ERROR_ENUM_FILTER_INVALID" nick="filter-invalid" value="14"/>
+    <member name="PK_ERROR_ENUM_CREATE_THREAD_FAILED" nick="create-thread-failed" value="15"/>
+    <member name="PK_ERROR_ENUM_TRANSACTION_ERROR" nick="transaction-error" value="16"/>
+    <member name="PK_ERROR_ENUM_TRANSACTION_CANCELLED" nick="transaction-cancelled" value="17"/>
+    <member name="PK_ERROR_ENUM_NO_CACHE" nick="no-cache" value="18"/>
+    <member name="PK_ERROR_ENUM_REPO_NOT_FOUND" nick="repo-not-found" value="19"/>
+    <member name="PK_ERROR_ENUM_CANNOT_REMOVE_SYSTEM_PACKAGE" nick="cannot-remove-system-package" value="20"/>
+    <member name="PK_ERROR_ENUM_PROCESS_KILL" nick="process-kill" value="21"/>
+    <member name="PK_ERROR_ENUM_FAILED_INITIALIZATION" nick="failed-initialization" value="22"/>
+    <member name="PK_ERROR_ENUM_FAILED_FINALISE" nick="failed-finalise" value="23"/>
+    <member name="PK_ERROR_ENUM_FAILED_CONFIG_PARSING" nick="failed-config-parsing" value="24"/>
+    <member name="PK_ERROR_ENUM_CANNOT_CANCEL" nick="cannot-cancel" value="25"/>
+    <member name="PK_ERROR_ENUM_CANNOT_GET_LOCK" nick="cannot-get-lock" value="26"/>
+    <member name="PK_ERROR_ENUM_NO_PACKAGES_TO_UPDATE" nick="no-packages-to-update" value="27"/>
+    <member name="PK_ERROR_ENUM_CANNOT_WRITE_REPO_CONFIG" nick="cannot-write-repo-config" value="28"/>
+    <member name="PK_ERROR_ENUM_LOCAL_INSTALL_FAILED" nick="local-install-failed" value="29"/>
+    <member name="PK_ERROR_ENUM_BAD_GPG_SIGNATURE" nick="bad-gpg-signature" value="30"/>
+    <member name="PK_ERROR_ENUM_MISSING_GPG_SIGNATURE" nick="missing-gpg-signature" value="31"/>
+    <member name="PK_ERROR_ENUM_CANNOT_INSTALL_SOURCE_PACKAGE" nick="cannot-install-source-package" value="32"/>
+    <member name="PK_ERROR_ENUM_REPO_CONFIGURATION_ERROR" nick="repo-configuration-error" value="33"/>
+    <member name="PK_ERROR_ENUM_NO_LICENSE_AGREEMENT" nick="no-license-agreement" value="34"/>
+    <member name="PK_ERROR_ENUM_FILE_CONFLICTS" nick="file-conflicts" value="35"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_CONFLICTS" nick="package-conflicts" value="36"/>
+    <member name="PK_ERROR_ENUM_REPO_NOT_AVAILABLE" nick="repo-not-available" value="37"/>
+    <member name="PK_ERROR_ENUM_INVALID_PACKAGE_FILE" nick="invalid-package-file" value="38"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_INSTALL_BLOCKED" nick="package-install-blocked" value="39"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_CORRUPT" nick="package-corrupt" value="40"/>
+    <member name="PK_ERROR_ENUM_ALL_PACKAGES_ALREADY_INSTALLED" nick="all-packages-already-installed" value="41"/>
+    <member name="PK_ERROR_ENUM_FILE_NOT_FOUND" nick="file-not-found" value="42"/>
+    <member name="PK_ERROR_ENUM_NO_MORE_MIRRORS_TO_TRY" nick="no-more-mirrors-to-try" value="43"/>
+    <member name="PK_ERROR_ENUM_NO_DISTRO_UPGRADE_DATA" nick="no-distro-upgrade-data" value="44"/>
+    <member name="PK_ERROR_ENUM_INCOMPATIBLE_ARCHITECTURE" nick="incompatible-architecture" value="45"/>
+    <member name="PK_ERROR_ENUM_NO_SPACE_ON_DEVICE" nick="no-space-on-device" value="46"/>
+    <member name="PK_ERROR_ENUM_MEDIA_CHANGE_REQUIRED" nick="media-change-required" value="47"/>
+    <member name="PK_ERROR_ENUM_NOT_AUTHORIZED" nick="not-authorized" value="48"/>
+    <member name="PK_ERROR_ENUM_UPDATE_NOT_FOUND" nick="update-not-found" value="49"/>
+    <member name="PK_ERROR_ENUM_CANNOT_INSTALL_REPO_UNSIGNED" nick="cannot-install-repo-unsigned" value="50"/>
+    <member name="PK_ERROR_ENUM_CANNOT_UPDATE_REPO_UNSIGNED" nick="cannot-update-repo-unsigned" value="51"/>
+    <member name="PK_ERROR_ENUM_CANNOT_GET_FILELIST" nick="cannot-get-filelist" value="52"/>
+    <member name="PK_ERROR_ENUM_CANNOT_GET_REQUIRES" nick="cannot-get-requires" value="53"/>
+    <member name="PK_ERROR_ENUM_CANNOT_DISABLE_REPOSITORY" nick="cannot-disable-repository" value="54"/>
+    <member name="PK_ERROR_ENUM_RESTRICTED_DOWNLOAD" nick="restricted-download" value="55"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_FAILED_TO_CONFIGURE" nick="package-failed-to-configure" value="56"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_FAILED_TO_BUILD" nick="package-failed-to-build" value="57"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_FAILED_TO_INSTALL" nick="package-failed-to-install" value="58"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_FAILED_TO_REMOVE" nick="package-failed-to-remove" value="59"/>
+    <member name="PK_ERROR_ENUM_UPDATE_FAILED_DUE_TO_RUNNING_PROCESS" nick="update-failed-due-to-running-process" value="60"/>
+    <member name="PK_ERROR_ENUM_PACKAGE_DATABASE_CHANGED" nick="package-database-changed" value="61"/>
+    <member name="PK_ERROR_ENUM_PROVIDE_TYPE_NOT_SUPPORTED" nick="provide-type-not-supported" value="62"/>
+    <member name="PK_ERROR_ENUM_INSTALL_ROOT_INVALID" nick="install-root-invalid" value="63"/>
+    <member name="PK_ERROR_ENUM_CANNOT_FETCH_SOURCES" nick="cannot-fetch-sources" value="64"/>
+    <member name="PK_ERROR_ENUM_CANCELLED_PRIORITY" nick="cancelled-priority" value="65"/>
+    <member name="PK_ERROR_ENUM_UNFINISHED_TRANSACTION" nick="unfinished-transaction" value="66"/>
+    <member name="PK_ERROR_ENUM_LOCK_REQUIRED" nick="lock-required" value="67"/>
+    <member name="PK_ERROR_ENUM_REPO_ALREADY_SET" nick="repo-already-set" value="68"/>
+    <member name="PK_ERROR_ENUM_LAST" nick="last" value="69"/>
+  </enum>  <enum name="PkGroupEnum" get-type="pk_group_enum_get_type">
+    <member name="PK_GROUP_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_GROUP_ENUM_ACCESSIBILITY" nick="accessibility" value="1"/>
+    <member name="PK_GROUP_ENUM_ACCESSORIES" nick="accessories" value="2"/>
+    <member name="PK_GROUP_ENUM_ADMIN_TOOLS" nick="admin-tools" value="3"/>
+    <member name="PK_GROUP_ENUM_COMMUNICATION" nick="communication" value="4"/>
+    <member name="PK_GROUP_ENUM_DESKTOP_GNOME" nick="desktop-gnome" value="5"/>
+    <member name="PK_GROUP_ENUM_DESKTOP_KDE" nick="desktop-kde" value="6"/>
+    <member name="PK_GROUP_ENUM_DESKTOP_OTHER" nick="desktop-other" value="7"/>
+    <member name="PK_GROUP_ENUM_DESKTOP_XFCE" nick="desktop-xfce" value="8"/>
+    <member name="PK_GROUP_ENUM_EDUCATION" nick="education" value="9"/>
+    <member name="PK_GROUP_ENUM_FONTS" nick="fonts" value="10"/>
+    <member name="PK_GROUP_ENUM_GAMES" nick="games" value="11"/>
+    <member name="PK_GROUP_ENUM_GRAPHICS" nick="graphics" value="12"/>
+    <member name="PK_GROUP_ENUM_INTERNET" nick="internet" value="13"/>
+    <member name="PK_GROUP_ENUM_LEGACY" nick="legacy" value="14"/>
+    <member name="PK_GROUP_ENUM_LOCALIZATION" nick="localization" value="15"/>
+    <member name="PK_GROUP_ENUM_MAPS" nick="maps" value="16"/>
+    <member name="PK_GROUP_ENUM_MULTIMEDIA" nick="multimedia" value="17"/>
+    <member name="PK_GROUP_ENUM_NETWORK" nick="network" value="18"/>
+    <member name="PK_GROUP_ENUM_OFFICE" nick="office" value="19"/>
+    <member name="PK_GROUP_ENUM_OTHER" nick="other" value="20"/>
+    <member name="PK_GROUP_ENUM_POWER_MANAGEMENT" nick="power-management" value="21"/>
+    <member name="PK_GROUP_ENUM_PROGRAMMING" nick="programming" value="22"/>
+    <member name="PK_GROUP_ENUM_PUBLISHING" nick="publishing" value="23"/>
+    <member name="PK_GROUP_ENUM_REPOS" nick="repos" value="24"/>
+    <member name="PK_GROUP_ENUM_SECURITY" nick="security" value="25"/>
+    <member name="PK_GROUP_ENUM_SERVERS" nick="servers" value="26"/>
+    <member name="PK_GROUP_ENUM_SYSTEM" nick="system" value="27"/>
+    <member name="PK_GROUP_ENUM_VIRTUALIZATION" nick="virtualization" value="28"/>
+    <member name="PK_GROUP_ENUM_SCIENCE" nick="science" value="29"/>
+    <member name="PK_GROUP_ENUM_DOCUMENTATION" nick="documentation" value="30"/>
+    <member name="PK_GROUP_ENUM_ELECTRONICS" nick="electronics" value="31"/>
+    <member name="PK_GROUP_ENUM_COLLECTIONS" nick="collections" value="32"/>
+    <member name="PK_GROUP_ENUM_VENDOR" nick="vendor" value="33"/>
+    <member name="PK_GROUP_ENUM_NEWEST" nick="newest" value="34"/>
+    <member name="PK_GROUP_ENUM_DESKTOP_DDE" nick="desktop-dde" value="35"/>
+    <member name="PK_GROUP_ENUM_LAST" nick="last" value="36"/>
+  </enum>  <enum name="PkUpdateStateEnum" get-type="pk_update_state_enum_get_type">
+    <member name="PK_UPDATE_STATE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_UPDATE_STATE_ENUM_STABLE" nick="stable" value="1"/>
+    <member name="PK_UPDATE_STATE_ENUM_UNSTABLE" nick="unstable" value="2"/>
+    <member name="PK_UPDATE_STATE_ENUM_TESTING" nick="testing" value="3"/>
+    <member name="PK_UPDATE_STATE_ENUM_LAST" nick="last" value="4"/>
+  </enum>  <enum name="PkInfoEnum" get-type="pk_info_enum_get_type">
+    <member name="PK_INFO_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_INFO_ENUM_INSTALLED" nick="installed" value="1"/>
+    <member name="PK_INFO_ENUM_AVAILABLE" nick="available" value="2"/>
+    <member name="PK_INFO_ENUM_LOW" nick="low" value="3"/>
+    <member name="PK_INFO_ENUM_ENHANCEMENT" nick="enhancement" value="4"/>
+    <member name="PK_INFO_ENUM_NORMAL" nick="normal" value="5"/>
+    <member name="PK_INFO_ENUM_BUGFIX" nick="bugfix" value="6"/>
+    <member name="PK_INFO_ENUM_IMPORTANT" nick="important" value="7"/>
+    <member name="PK_INFO_ENUM_SECURITY" nick="security" value="8"/>
+    <member name="PK_INFO_ENUM_BLOCKED" nick="blocked" value="9"/>
+    <member name="PK_INFO_ENUM_DOWNLOADING" nick="downloading" value="10"/>
+    <member name="PK_INFO_ENUM_UPDATING" nick="updating" value="11"/>
+    <member name="PK_INFO_ENUM_INSTALLING" nick="installing" value="12"/>
+    <member name="PK_INFO_ENUM_REMOVING" nick="removing" value="13"/>
+    <member name="PK_INFO_ENUM_CLEANUP" nick="cleanup" value="14"/>
+    <member name="PK_INFO_ENUM_OBSOLETING" nick="obsoleting" value="15"/>
+    <member name="PK_INFO_ENUM_COLLECTION_INSTALLED" nick="collection-installed" value="16"/>
+    <member name="PK_INFO_ENUM_COLLECTION_AVAILABLE" nick="collection-available" value="17"/>
+    <member name="PK_INFO_ENUM_FINISHED" nick="finished" value="18"/>
+    <member name="PK_INFO_ENUM_REINSTALLING" nick="reinstalling" value="19"/>
+    <member name="PK_INFO_ENUM_DOWNGRADING" nick="downgrading" value="20"/>
+    <member name="PK_INFO_ENUM_PREPARING" nick="preparing" value="21"/>
+    <member name="PK_INFO_ENUM_DECOMPRESSING" nick="decompressing" value="22"/>
+    <member name="PK_INFO_ENUM_UNTRUSTED" nick="untrusted" value="23"/>
+    <member name="PK_INFO_ENUM_TRUSTED" nick="trusted" value="24"/>
+    <member name="PK_INFO_ENUM_UNAVAILABLE" nick="unavailable" value="25"/>
+    <member name="PK_INFO_ENUM_CRITICAL" nick="critical" value="26"/>
+    <member name="PK_INFO_ENUM_INSTALL" nick="install" value="27"/>
+    <member name="PK_INFO_ENUM_REMOVE" nick="remove" value="28"/>
+    <member name="PK_INFO_ENUM_OBSOLETE" nick="obsolete" value="29"/>
+    <member name="PK_INFO_ENUM_DOWNGRADE" nick="downgrade" value="30"/>
+    <member name="PK_INFO_ENUM_LAST" nick="last" value="31"/>
+  </enum>  <enum name="PkDistroUpgradeEnum" get-type="pk_distro_upgrade_enum_get_type">
+    <member name="PK_DISTRO_UPGRADE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_DISTRO_UPGRADE_ENUM_STABLE" nick="stable" value="1"/>
+    <member name="PK_DISTRO_UPGRADE_ENUM_UNSTABLE" nick="unstable" value="2"/>
+    <member name="PK_DISTRO_UPGRADE_ENUM_LAST" nick="last" value="3"/>
+  </enum>  <enum name="PkSigTypeEnum" get-type="pk_sig_type_enum_get_type">
+    <member name="PK_SIGTYPE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_SIGTYPE_ENUM_GPG" nick="gpg" value="1"/>
+    <member name="PK_SIGTYPE_ENUM_LAST" nick="last" value="2"/>
+  </enum>  <enum name="PkMediaTypeEnum" get-type="pk_media_type_enum_get_type">
+    <member name="PK_MEDIA_TYPE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_MEDIA_TYPE_ENUM_CD" nick="cd" value="1"/>
+    <member name="PK_MEDIA_TYPE_ENUM_DVD" nick="dvd" value="2"/>
+    <member name="PK_MEDIA_TYPE_ENUM_DISC" nick="disc" value="3"/>
+    <member name="PK_MEDIA_TYPE_ENUM_LAST" nick="last" value="4"/>
+  </enum>  <enum name="PkAuthorizeEnum" get-type="pk_authorize_enum_get_type">
+    <member name="PK_AUTHORIZE_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_AUTHORIZE_ENUM_YES" nick="yes" value="1"/>
+    <member name="PK_AUTHORIZE_ENUM_NO" nick="no" value="2"/>
+    <member name="PK_AUTHORIZE_ENUM_INTERACTIVE" nick="interactive" value="3"/>
+    <member name="PK_AUTHORIZE_ENUM_LAST" nick="last" value="4"/>
+  </enum>  <enum name="PkUpgradeKindEnum" get-type="pk_upgrade_kind_enum_get_type">
+    <member name="PK_UPGRADE_KIND_ENUM_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_UPGRADE_KIND_ENUM_MINIMAL" nick="minimal" value="1"/>
+    <member name="PK_UPGRADE_KIND_ENUM_DEFAULT" nick="default" value="2"/>
+    <member name="PK_UPGRADE_KIND_ENUM_COMPLETE" nick="complete" value="3"/>
+    <member name="PK_UPGRADE_KIND_ENUM_LAST" nick="last" value="4"/>
+  </enum>  <enum name="PkTransactionFlagEnum" get-type="pk_transaction_flag_enum_get_type">
+    <member name="PK_TRANSACTION_FLAG_ENUM_NONE" nick="none" value="0"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_ONLY_TRUSTED" nick="only-trusted" value="1"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_SIMULATE" nick="simulate" value="2"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_ONLY_DOWNLOAD" nick="only-download" value="3"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_ALLOW_REINSTALL" nick="allow-reinstall" value="4"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_JUST_REINSTALL" nick="just-reinstall" value="5"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_ALLOW_DOWNGRADE" nick="allow-downgrade" value="6"/>
+    <member name="PK_TRANSACTION_FLAG_ENUM_LAST" nick="last" value="7"/>
+  </enum>  <enum name="PkOfflineAction" get-type="pk_offline_action_get_type">
+    <member name="PK_OFFLINE_ACTION_UNKNOWN" nick="unknown" value="0"/>
+    <member name="PK_OFFLINE_ACTION_REBOOT" nick="reboot" value="1"/>
+    <member name="PK_OFFLINE_ACTION_POWER_OFF" nick="power-off" value="2"/>
+    <member name="PK_OFFLINE_ACTION_UNSET" nick="unset" value="3"/>
+  </enum>  <enum name="PkOfflineError" get-type="pk_offline_error_get_type">
+    <member name="PK_OFFLINE_ERROR_FAILED" nick="failed" value="0"/>
+    <member name="PK_OFFLINE_ERROR_INVALID_VALUE" nick="invalid-value" value="1"/>
+    <member name="PK_OFFLINE_ERROR_NO_DATA" nick="no-data" value="2"/>
+  </enum>  <flags name="PkOfflineFlags" get-type="pk_offline_flags_get_type">
+    <member name="PK_OFFLINE_FLAGS_NONE" nick="none" value="0"/>
+    <member name="PK_OFFLINE_FLAGS_INTERACTIVE" nick="interactive" value="1"/>
+  </flags>
+  <enum name="PkPackageSackSortType" get-type="pk_package_sack_sort_type_get_type">
+    <member name="PK_PACKAGE_SACK_SORT_TYPE_NAME" nick="name" value="0"/>
+    <member name="PK_PACKAGE_SACK_SORT_TYPE_INFO" nick="info" value="1"/>
+    <member name="PK_PACKAGE_SACK_SORT_TYPE_PACKAGE_ID" nick="package-id" value="2"/>
+    <member name="PK_PACKAGE_SACK_SORT_TYPE_SUMMARY" nick="summary" value="3"/>
+    <member name="PK_PACKAGE_SACK_SORT_TYPE_LAST" nick="last" value="4"/>
+  </enum>  <enum name="PkProgressType" get-type="pk_progress_type_get_type">
+    <member name="PK_PROGRESS_TYPE_PACKAGE_ID" nick="package-id" value="0"/>
+    <member name="PK_PROGRESS_TYPE_TRANSACTION_ID" nick="transaction-id" value="1"/>
+    <member name="PK_PROGRESS_TYPE_PERCENTAGE" nick="percentage" value="2"/>
+    <member name="PK_PROGRESS_TYPE_ALLOW_CANCEL" nick="allow-cancel" value="3"/>
+    <member name="PK_PROGRESS_TYPE_STATUS" nick="status" value="4"/>
+    <member name="PK_PROGRESS_TYPE_ROLE" nick="role" value="5"/>
+    <member name="PK_PROGRESS_TYPE_CALLER_ACTIVE" nick="caller-active" value="6"/>
+    <member name="PK_PROGRESS_TYPE_ELAPSED_TIME" nick="elapsed-time" value="7"/>
+    <member name="PK_PROGRESS_TYPE_REMAINING_TIME" nick="remaining-time" value="8"/>
+    <member name="PK_PROGRESS_TYPE_SPEED" nick="speed" value="9"/>
+    <member name="PK_PROGRESS_TYPE_DOWNLOAD_SIZE_REMAINING" nick="download-size-remaining" value="10"/>
+    <member name="PK_PROGRESS_TYPE_UID" nick="uid" value="11"/>
+    <member name="PK_PROGRESS_TYPE_PACKAGE" nick="package" value="12"/>
+    <member name="PK_PROGRESS_TYPE_ITEM_PROGRESS" nick="item-progress" value="13"/>
+    <member name="PK_PROGRESS_TYPE_TRANSACTION_FLAGS" nick="transaction-flags" value="14"/>
+    <member name="PK_PROGRESS_TYPE_INVALID" nick="invalid" value="15"/>
+    <member name="PK_PROGRESS_TYPE_SENDER" nick="sender" value="16"/>
+  </enum>  <class name="PkTask" get-type="pk_task_get_type" parents="PkClient,GObject">
+    <property name="simulate" type="gboolean" flags="227" default-value="TRUE"/>
+    <property name="only-download" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="only-trusted" type="gboolean" flags="227" default-value="TRUE"/>
+    <property name="allow-reinstall" type="gboolean" flags="227" default-value="FALSE"/>
+    <property name="allow-downgrade" type="gboolean" flags="227" default-value="FALSE"/>
+  </class>
+  <class name="PkTransactionList" get-type="pk_transaction_list_get_type" parents="GObject">
+    <signal name="added" return="void" when="last">
+      <param type="gchararray"/>
+    </signal>
+    <signal name="removed" return="void" when="last">
+      <param type="gchararray"/>
+    </signal>
+  </class>
+  <class name="PkClientHelper" get-type="pk_client_helper_get_type" parents="GObject">
+  </class>
+  <error-quark function="pk_offline_error_quark" domain="pk-offline-error-quark"/>
+  <error-quark function="pk_client_error_quark" domain="pk-client-error-quark"/>
+  <error-quark function="pk_control_error_quark" domain="pk-control-error-quark"/>
+</dump>

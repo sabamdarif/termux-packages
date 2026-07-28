@@ -1,0 +1,12 @@
+diff --git a/meson.build b/meson.build
+index 2f869c4..72a2355 100644
+--- a/meson.build
++++ b/meson.build
+@@ -171,7 +171,6 @@ add_project_arguments(
+     '-Wno-error=unused-parameter',
+     '-Werror=misleading-indentation',
+     '-Werror=return-type',
+-    '-Werror=format-security',
+     '-Wformat',
+     '-Werror=shadow',
+     '-Werror=missing-declarations',

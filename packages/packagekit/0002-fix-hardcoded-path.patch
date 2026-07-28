@@ -1,0 +1,75 @@
+diff --git a/backends/alpm/90-packagekit-refresh.hook b/backends/alpm/90-packagekit-refresh.hook
+index 006a5b1..2567de5 100644
+--- a/backends/alpm/90-packagekit-refresh.hook
++++ b/backends/alpm/90-packagekit-refresh.hook
+@@ -8,4 +8,4 @@ Target = *
+ [Action]
+ Description = Refreshing PackageKit...
+ When = PostTransaction
+-Exec = /bin/sh -c 'gdbus call --system --timeout 30 --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --method org.freedesktop.PackageKit.StateHasChanged posttrans > /dev/null'
++Exec = @TERMUX_PREFIX@/bin/sh -c 'gdbus call --system --timeout 30 --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --method org.freedesktop.PackageKit.StateHasChanged posttrans > /dev/null'
+diff --git a/backends/alpm/meson.build b/backends/alpm/meson.build
+index d5838c3..a4f23b0 100644
+--- a/backends/alpm/meson.build
++++ b/backends/alpm/meson.build
+@@ -37,7 +37,7 @@ shared_module(
+     '-DPK_BACKEND_CONFIG_FILE="@0@"'.format(join_paths(get_option('sysconfdir'), 'PackageKit', 'alpm.d', 'pacman.conf')),
+     '-DPK_BACKEND_GROUP_FILE="@0@"'.format(join_paths(get_option('sysconfdir'), 'PackageKit', 'alpm.d', 'groups.list')),
+     '-DPK_BACKEND_REPO_FILE="@0@"'.format(join_paths(get_option('sysconfdir'), 'PackageKit', 'alpm.d', 'repos.list')),
+-    '-DPK_BACKEND_DEFAULT_PATH="/bin:/usr/bin:/sbin:/usr/sbin"',
++    '-DPK_BACKEND_DEFAULT_PATH="@TERMUX_PREFIX@/bin"',
+   ],
+   install: true,
+   install_dir: pk_plugin_dir,
+diff --git a/backends/alpm/pacman.conf b/backends/alpm/pacman.conf
+index 8fdef09..3a30d34 100644
+--- a/backends/alpm/pacman.conf
++++ b/backends/alpm/pacman.conf
+@@ -5,7 +5,7 @@
+ 
+ # Use default pacman configuration initially
+ #
+-Include = /etc/pacman.conf
++Include = @TERMUX_PREFIX@/etc/pacman.conf
+ 
+ # Prevent PackageKit from removing itself
+ #
+diff --git a/backends/apt/20packagekit b/backends/apt/20packagekit
+index b9e2bf4..3b12e5a 100644
+--- a/backends/apt/20packagekit
++++ b/backends/apt/20packagekit
+@@ -3,10 +3,10 @@
+ // Whenever dpkg is called we might have different updates
+ // i.e. if an user removes a package that had an update
+ DPkg::Post-Invoke {
+-"/usr/bin/test -e /usr/share/dbus-1/system-services/org.freedesktop.PackageKit.service && /usr/bin/test -S /var/run/dbus/system_bus_socket && /usr/bin/test ! -e /run/ostree-booted && /usr/bin/gdbus call --system --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --timeout 4 --method org.freedesktop.PackageKit.StateHasChanged cache-update > /dev/null; /bin/echo > /dev/null";
++"@TERMUX_PREFIX@/bin/test -e @TERMUX_PREFIX@/share/dbus-1/system-services/org.freedesktop.PackageKit.service && @TERMUX_PREFIX@/bin/test -S @TERMUX_PREFIX@/var/run/dbus/system_bus_socket && @TERMUX_PREFIX@/bin/test ! -e @TERMUX_PREFIX@/run/ostree-booted && @TERMUX_PREFIX@/bin/gdbus call --system --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --timeout 4 --method org.freedesktop.PackageKit.StateHasChanged cache-update > /dev/null; /bin/echo > /dev/null";
+ };
+ 
+ // When APT's cache is updated (i.e. apt-cache update)
+ APT::Update::Post-Invoke-Success {
+-"/usr/bin/test -e /usr/share/dbus-1/system-services/org.freedesktop.PackageKit.service && /usr/bin/test -S /var/run/dbus/system_bus_socket && /usr/bin/test ! -e /run/ostree-booted && /usr/bin/gdbus call --system --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --timeout 4 --method org.freedesktop.PackageKit.StateHasChanged cache-update > /dev/null; /bin/echo > /dev/null";
++"@TERMUX_PREFIX@/bin/test -e @TERMUX_PREFIX@/share/dbus-1/system-services/org.freedesktop.PackageKit.service && @TERMUX_PREFIX@/bin/test -S @TERMUX_PREFIX@/var/run/dbus/system_bus_socket && @TERMUX_PREFIX@/bin/test ! -e @TERMUX_PREFIX@/run/ostree-booted && @TERMUX_PREFIX@/bin/gdbus call --system --dest org.freedesktop.PackageKit --object-path /org/freedesktop/PackageKit --timeout 4 --method org.freedesktop.PackageKit.StateHasChanged cache-update > /dev/null; /bin/echo > /dev/null";
+ };
+diff --git a/backends/apt/apt-job.cpp b/backends/apt/apt-job.cpp
+index bb5dceb..b74437a 100644
+--- a/backends/apt/apt-job.cpp
++++ b/backends/apt/apt-job.cpp
+@@ -78,6 +78,8 @@ AptJob::AptJob(PkBackendJob *job)
+     // set locale
+     setEnvLocaleFromJob();
+ 
++    g_setenv("PATH", "@TERMUX_PREFIX@/bin", TRUE);
++
+     // set http proxy
+     http_proxy = pk_backend_job_get_proxy_http(m_job);
+     if (http_proxy != nullptr) {
+@@ -2620,7 +2622,7 @@ bool AptJob::installPackages(PkBitfield flags)
+     pk_backend_job_set_percentage(m_job, PK_BACKEND_PERCENTAGE_INVALID);
+ 
+     // we could try to see if this is the case
+-    g_setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", TRUE);
++    g_setenv("PATH", "@TERMUX_PREFIX@/bin", TRUE);
+     _system->UnLockInner();
+ 
+     pkgPackageManager::OrderResult res;

@@ -1,0 +1,398 @@
+diff --git a/meson.build b/meson.build
+index 2f869c4..24fcbea 100644
+--- a/meson.build
++++ b/meson.build
+@@ -24,7 +24,6 @@ gio_dep = dependency('gio-2.0', version: glib_req)
+ gio_unix_dep = dependency('gio-unix-2.0', version: glib_req)
+ gmodule_dep = dependency('gmodule-2.0', version: glib_req)
+ sqlite3_dep = dependency('sqlite3')
+-polkit_dep = dependency('polkit-gobject-1', version: '>=0.114')
+ jansson_dep = dependency('jansson', version: '>=2.8', required: true)
+ ply_client_dep = dependency('ply-boot-client', version: '>=0.9.5', required: false)
+ 
+@@ -194,7 +193,6 @@ add_project_arguments(
+ )
+ 
+ subdir('po')
+-subdir('policy')
+ subdir('etc')
+ subdir('data')
+ subdir('lib')
+diff --git a/src/meson.build b/src/meson.build
+index 77a9763..b3172f3 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -70,7 +70,6 @@ packagekitd_exec = executable(
+     packagekit_glib2_dep,
+     libsystemd,
+     elogind,
+-    polkit_dep,
+     gmodule_dep,
+     sqlite3_dep,
+   ],
+diff --git a/src/pk-engine.c b/src/pk-engine.c
+index ede421a..d626b1a 100644
+--- a/src/pk-engine.c
++++ b/src/pk-engine.c
+@@ -41,7 +41,6 @@
+ #include <packagekit-glib2/pk-offline.h>
+ #include <packagekit-glib2/pk-offline-private.h>
+ #include <packagekit-glib2/pk-version.h>
+-#include <polkit/polkit.h>
+ 
+ #include "pk-backend.h"
+ #include "pk-dbus.h"
+@@ -86,7 +85,6 @@ struct _PkEngine
+ 	gchar			*distro_id;
+ 	guint			 timeout_priority_id;
+ 	guint			 timeout_normal_id;
+-	PolkitAuthority		*authority;
+ 	gboolean		 locked;
+ 	PkNetworkEnum		 network_state;
+ 	guint			 owner_id;
+@@ -514,14 +512,19 @@ typedef struct {
+ } PkEngineDbusState;
+ 
+ static void
++#ifndef __ANDROID__
+ pk_engine_action_obtain_proxy_authorization_finished_cb (PolkitAuthority *authority,
+ 							 GAsyncResult *res,
++#else
++pk_engine_action_obtain_proxy_authorization_finished_cb (
++#endif
+ 							 PkEngineDbusState *state)
+ {
+ 	gboolean ret;
+ 	PkEngine *engine = state->engine;
+ 	g_autoptr(GError) error = NULL;
+ 	g_autoptr(GError) error_local = NULL;
++#ifndef __ANDROID__
+ 	g_autoptr(PolkitAuthorizationResult) result = NULL;
+ 
+ 	/* finish the call */
+@@ -543,6 +546,7 @@ pk_engine_action_obtain_proxy_authorization_finished_cb (PolkitAuthority *author
+ 		g_dbus_method_invocation_return_gerror (state->context, error);
+ 		goto out;
+ 	}
++#endif
+ 
+ 	/* try to set the new proxy and save to database */
+ 	ret = pk_engine_set_proxy_internal (state->engine,
+@@ -649,6 +653,7 @@ pk_engine_is_proxy_unchanged (PkEngine *engine, const gchar *sender,
+ 	return TRUE;
+ }
+ 
++#ifndef __ANDROID__
+ static PolkitCheckAuthorizationFlags
+ get_polkit_flags_for_dbus_invocation (GDBusMethodInvocation *invocation)
+ {
+@@ -660,6 +665,7 @@ get_polkit_flags_for_dbus_invocation (GDBusMethodInvocation *invocation)
+ 
+ 	return flags;
+ }
++#endif
+ 
+ static void
+ pk_engine_set_proxy (PkEngine *engine,
+@@ -676,7 +682,6 @@ pk_engine_set_proxy (PkEngine *engine,
+ 	gboolean ret;
+ 	const gchar *sender;
+ 	PkEngineDbusState *state;
+-	g_autoptr(PolkitSubject) subject = NULL;
+ 
+ 	g_return_if_fail (PK_IS_ENGINE (engine));
+ 
+@@ -725,9 +730,6 @@ pk_engine_set_proxy (PkEngine *engine,
+ 		goto out;
+ 	}
+ 
+-	/* check subject */
+-	subject = polkit_system_bus_name_new (sender);
+-
+ 	/* cache state */
+ 	state = g_new0 (PkEngineDbusState, 1);
+ 	state->context = context;
+@@ -740,14 +742,7 @@ pk_engine_set_proxy (PkEngine *engine,
+ 	state->value5 = g_strdup (no_proxy);
+ 	state->value6 = g_strdup (pac);
+ 
+-	/* do authorization async */
+-	polkit_authority_check_authorization (engine->authority, subject,
+-					      "org.freedesktop.packagekit.system-network-proxy-configure",
+-					      NULL,
+-					      get_polkit_flags_for_dbus_invocation (context),
+-					      NULL,
+-					      (GAsyncReadyCallback) pk_engine_action_obtain_proxy_authorization_finished_cb,
+-					      state);
++	pk_engine_action_obtain_proxy_authorization_finished_cb(state);
+ 
+ 	/* reset the timer */
+ 	pk_engine_reset_timer (engine);
+@@ -761,6 +756,7 @@ pk_engine_can_authorize_action_id (PkEngine *engine,
+ 				   const gchar *sender,
+ 				   GError **error)
+ {
++#ifndef __ANDROID__
+ 	g_autoptr(PolkitAuthorizationResult) res = NULL;
+ 	g_autoptr(PolkitSubject) subject = NULL;
+ 
+@@ -788,6 +784,9 @@ pk_engine_can_authorize_action_id (PkEngine *engine,
+ 
+ 	/* fall back to not letting user authenticate */
+ 	return PK_AUTHORIZE_ENUM_NO;
++#else
++	return PK_AUTHORIZE_ENUM_YES;
++#endif
+ }
+ 
+ static void
+@@ -983,9 +982,6 @@ pk_engine_load_backend (PkEngine *engine, GError **error)
+ 		return FALSE;
+ 
+ 	/* load anything that can fail */
+-	engine->authority = polkit_authority_get_sync (NULL, error);
+-	if (engine->authority == NULL)
+-		return FALSE;
+ 	if (!pk_transaction_db_load (engine->transaction_db, error))
+ 		return FALSE;
+ 
+@@ -1535,6 +1531,7 @@ pk_engine_offline_helper_cb (GObject *source, GAsyncResult *res, gpointer user_d
+ 	g_autofree gchar *version = NULL;
+ 	g_autoptr(GError) error = NULL;
+ 	g_autoptr(GFile) file = NULL;
++#ifndef __ANDROID__
+ 	g_autoptr(PolkitAuthorizationResult) result = NULL;
+ 
+ 	/* finish the call */
+@@ -1558,6 +1555,7 @@ pk_engine_offline_helper_cb (GObject *source, GAsyncResult *res, gpointer user_d
+ 		pk_engine_offline_helper_free (helper);
+ 		return;
+ 	}
++#endif
+ 
+ 	switch (helper->role) {
+ 	case PK_ENGINE_OFFLINE_ROLE_CLEAR_RESULTS:
+@@ -1616,28 +1614,19 @@ pk_engine_offline_method_call (GDBusConnection *connection_, const gchar *sender
+ 	PkEngine *engine = PK_ENGINE (user_data);
+ 	PkEngineOfflineAsyncHelper *helper;
+ 	g_autoptr(GError) error = NULL;
+-	g_autoptr(PolkitSubject) subject = NULL;
+ 
+ 	g_return_if_fail (PK_IS_ENGINE (engine));
+ 
+ 	/* reset the timer */
+ 	pk_engine_reset_timer (engine);
+ 
+-	/* set up polkit */
+-	subject = polkit_system_bus_name_new (sender);
+ 
+ 	if (g_strcmp0 (method_name, "Cancel") == 0) {
+ 		helper = g_new0 (PkEngineOfflineAsyncHelper, 1);
+ 		helper->engine = g_object_ref (engine);
+ 		helper->role = PK_ENGINE_OFFLINE_ROLE_CANCEL;
+ 		helper->invocation = g_object_ref (invocation);
+-		polkit_authority_check_authorization (engine->authority, subject,
+-						      "org.freedesktop.packagekit.trigger-offline-update",
+-						      NULL,
+-						      get_polkit_flags_for_dbus_invocation (invocation),
+-						      NULL,
+-						      pk_engine_offline_helper_cb,
+-						      helper);
++		pk_engine_offline_helper_cb(NULL, NULL, helper);
+ 		return;
+ 	}
+ 	if (g_strcmp0 (method_name, "ClearResults") == 0) {
+@@ -1645,13 +1634,7 @@ pk_engine_offline_method_call (GDBusConnection *connection_, const gchar *sender
+ 		helper->engine = g_object_ref (engine);
+ 		helper->role = PK_ENGINE_OFFLINE_ROLE_CLEAR_RESULTS;
+ 		helper->invocation = g_object_ref (invocation);
+-		polkit_authority_check_authorization (engine->authority, subject,
+-						      "org.freedesktop.packagekit.clear-offline-update",
+-						      NULL,
+-						      get_polkit_flags_for_dbus_invocation (invocation),
+-						      NULL,
+-						      pk_engine_offline_helper_cb,
+-						      helper);
++		pk_engine_offline_helper_cb(NULL, NULL, helper);
+ 		return;
+ 	}
+ 	if (g_strcmp0 (method_name, "Trigger") == 0) {
+@@ -1681,13 +1664,7 @@ pk_engine_offline_method_call (GDBusConnection *connection_, const gchar *sender
+ 		helper->role = PK_ENGINE_OFFLINE_ROLE_TRIGGER;
+ 		helper->invocation = g_object_ref (invocation);
+ 		helper->action = action;
+-		polkit_authority_check_authorization (engine->authority, subject,
+-						      "org.freedesktop.packagekit.trigger-offline-update",
+-						      NULL,
+-						      get_polkit_flags_for_dbus_invocation (invocation),
+-						      NULL,
+-						      pk_engine_offline_helper_cb,
+-						      helper);
++		pk_engine_offline_helper_cb(NULL, NULL, helper);
+ 		return;
+ 	}
+ 	if (g_strcmp0 (method_name, "TriggerUpgrade") == 0) {
+@@ -1717,13 +1694,7 @@ pk_engine_offline_method_call (GDBusConnection *connection_, const gchar *sender
+ 		helper->role = PK_ENGINE_OFFLINE_ROLE_TRIGGER_UPGRADE;
+ 		helper->invocation = g_object_ref (invocation);
+ 		helper->action = action;
+-		polkit_authority_check_authorization (engine->authority, subject,
+-						      "org.freedesktop.packagekit.trigger-offline-upgrade",
+-						      NULL,
+-						      get_polkit_flags_for_dbus_invocation (invocation),
+-						      NULL,
+-						      pk_engine_offline_helper_cb,
+-						      helper);
++		pk_engine_offline_helper_cb(NULL, NULL, helper);
+ 		return;
+ 	}
+ 	if (g_strcmp0 (method_name, "GetPrepared") == 0) {
+@@ -2003,8 +1974,6 @@ pk_engine_finalize (GObject *object)
+ 	g_object_unref (engine->monitor_offline_upgrade);
+ 	g_object_unref (engine->scheduler);
+ 	g_object_unref (engine->transaction_db);
+-	if (engine->authority != NULL)
+-		g_object_unref (engine->authority);
+ 	g_object_unref (engine->backend);
+ 	g_key_file_unref (engine->conf);
+ 	g_object_unref (engine->dbus);
+diff --git a/src/pk-transaction.c b/src/pk-transaction.c
+index 5b37602..14b5f20 100644
+--- a/src/pk-transaction.c
++++ b/src/pk-transaction.c
+@@ -47,7 +47,6 @@
+ #include <packagekit-glib2/pk-package-id.h>
+ #include <packagekit-glib2/pk-package-ids.h>
+ #include <packagekit-glib2/pk-results.h>
+-#include <polkit/polkit.h>
+ 
+ #include "pk-backend.h"
+ #include "pk-dbus.h"
+@@ -101,8 +100,6 @@ struct _PkTransaction
+ 	PkBackendJob		*job;
+ 	GKeyFile		*conf;
+ 	PkDbus			*dbus;
+-	PolkitAuthority		*authority;
+-	PolkitSubject		*subject;
+ 	GCancellable		*cancellable;
+ 	gboolean		 skip_auth_check;
+ 	gboolean		 client_supports_plural_signals;
+@@ -2388,7 +2385,6 @@ pk_transaction_set_sender (PkTransaction *transaction, const gchar *sender)
+ 				  NULL);
+ 
+ 	/* we get the UID for all callers as we need to know when to cancel */
+-	transaction->subject = polkit_system_bus_name_new (sender);
+ 	if (!pk_dbus_connect (transaction->dbus, &error)) {
+ 		g_warning ("cannot get UID: %s", error->message);
+ 		return FALSE;
+@@ -2543,14 +2539,11 @@ pk_transaction_authorize_actions_finished_cb (GObject *source_object,
+ 	PkTransaction *transaction = data->transaction;
+ 	const gchar *action_id = NULL;
+ 	g_autoptr(GError) error = NULL;
+-	g_autoptr(PolkitAuthorizationResult) result = NULL;
+ 	g_assert (data->actions && data->actions->len > 0);
+ 
+ 	/* get the first action */
+ 	action_id = g_ptr_array_index (data->actions, 0);
+ 
+-	/* finish the call */
+-	result = polkit_authority_check_authorization_finish (transaction->authority, res, &error);
+ 
+ 	/* failed because the request was cancelled */
+ 	if (g_cancellable_is_cancelled (transaction->cancellable)) {
+@@ -2563,6 +2556,7 @@ pk_transaction_authorize_actions_finished_cb (GObject *source_object,
+ 		goto out;
+ 	}
+ 
++#ifndef __ANDROID__
+ 	/* failed, maybe polkit is messed up? */
+ 	if (result == NULL) {
+ 		g_autofree gchar *message = NULL;
+@@ -2590,6 +2584,7 @@ pk_transaction_authorize_actions_finished_cb (GObject *source_object,
+ 		syslog (LOG_AUTH | LOG_NOTICE, "uid %i failed to obtain auth", transaction->client_uid);
+ 		goto out;
+ 	}
++#endif
+ 
+ 	if (data->actions->len <= 1) {
+ 		/* authentication finished successfully */
+@@ -2628,12 +2623,10 @@ pk_transaction_authorize_actions (PkTransaction *transaction,
+ 				  GPtrArray *actions)
+ {
+ 	const gchar *action_id = NULL;
+-	g_autoptr(PolkitDetails) details = NULL;
+ 	g_autofree gchar *package_ids = NULL;
+ 	GString *string = NULL;
+ 	const gchar *text = NULL;
+ 	struct AuthorizeActionsData *data = NULL;
+-	PolkitCheckAuthorizationFlags flags;
+ 
+ 	if (actions->len <= 0) {
+ 		g_debug ("No authentication required");
+@@ -2657,6 +2650,7 @@ pk_transaction_authorize_actions (PkTransaction *transaction,
+ 	/* check subject */
+ 	transaction->waiting_for_auth = TRUE;
+ 
++#ifndef __ANDROID__
+ 	/* insert details about the authorization */
+ 	details = polkit_details_new ();
+ 
+@@ -2714,12 +2708,14 @@ pk_transaction_authorize_actions (PkTransaction *transaction,
+ 			polkit_details_insert (details, "polkit.message", string->str);
+ 		}
+ 	}
++#endif
+ 
+ 	data = g_new (struct AuthorizeActionsData, 1);
+ 	data->transaction = g_object_ref (transaction);
+ 	data->role = role;
+ 	data->actions = g_ptr_array_ref (actions);
+ 
++#ifndef __ANDROID__
+ 	/* create if required */
+ 	if (transaction->authority == NULL) {
+ 		g_autoptr(GError) error = NULL;
+@@ -2744,6 +2740,8 @@ pk_transaction_authorize_actions (PkTransaction *transaction,
+ 					      transaction->cancellable,
+ 					      (GAsyncReadyCallback) pk_transaction_authorize_actions_finished_cb,
+ 					      data);
++#endif
++	pk_transaction_authorize_actions_finished_cb(NULL, NULL, data);
+ 	return TRUE;
+ }
+ 
+@@ -2869,7 +2867,6 @@ pk_transaction_obtain_authorization (PkTransaction *transaction,
+ {
+ 	g_autoptr(GPtrArray) actions = NULL;
+ 	g_autofree gchar *package_ids = NULL;
+-	g_autoptr(PolkitDetails) details = NULL;
+ 	g_autoptr(GString) string = NULL;
+ 
+ 	g_return_val_if_fail (transaction->sender != NULL, FALSE);
+@@ -2901,7 +2898,7 @@ pk_transaction_obtain_authorization (PkTransaction *transaction,
+ 	}
+ 
+ 	/* we should always have subject */
+-	if (transaction->subject == NULL) {
++	if (FALSE) {
+ 		g_set_error (error,
+ 			     PK_TRANSACTION_ERROR,
+ 			     PK_TRANSACTION_ERROR_REFUSED_BY_POLICY,
+@@ -5572,8 +5569,6 @@ pk_transaction_finalize (GObject *object)
+ 
+ 	transaction = PK_TRANSACTION (object);
+ 
+-	if (transaction->subject != NULL)
+-		g_object_unref (transaction->subject);
+ 	if (transaction->watch_id > 0)
+ 		g_bus_unwatch_name (transaction->watch_id);
+ 	g_free (transaction->last_package_id);
+@@ -5603,8 +5598,6 @@ pk_transaction_finalize (GObject *object)
+ 	g_object_unref (transaction->job);
+ 	g_object_unref (transaction->transaction_db);
+ 	g_object_unref (transaction->results);
+-	if (transaction->authority != NULL)
+-		g_object_unref (transaction->authority);
+ 	g_object_unref (transaction->cancellable);
+ 
+ 	G_OBJECT_CLASS (pk_transaction_parent_class)->finalize (object);

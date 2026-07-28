@@ -1,0 +1,16 @@
+Prevents:
+error: declaration shadows a variable in the global scope
+
+--- a/src/pk-backend-spawn.c
++++ b/src/pk-backend-spawn.c
+@@ -673,8 +673,8 @@ pk_backend_spawn_get_envp (PkBackendSpawn *backend_spawn)
+ 
+ 	/* copy environment if so specified (for debugging) */
+ 	if (keep_environment) {
+-		g_auto(GStrv) environ = g_get_environ ();
+-		for (env_item = environ; env_item && *env_item; env_item++) {
++		g_auto(GStrv) pk_environ = g_get_environ ();
++		for (env_item = pk_environ; env_item && *env_item; env_item++) {
+ 			g_auto(GStrv) env_item_split = NULL;
+ 			env_item_split = g_strsplit (*env_item, "=", 2);
+ 			if (env_item_split && (g_strv_length (env_item_split) == 2))
