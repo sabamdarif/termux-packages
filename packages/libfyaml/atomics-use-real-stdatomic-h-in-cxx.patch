@@ -1,0 +1,23 @@
+diff --git a/include/libfyaml/libfyaml-atomics.h b/include/libfyaml/libfyaml-atomics.h
+index 54d88ae..4b5d89d 100644
+--- a/include/libfyaml/libfyaml-atomics.h
++++ b/include/libfyaml/libfyaml-atomics.h
+@@ -55,8 +55,17 @@ extern "C" {
+ #endif
+ 
+ /* Detect standard C11 atomics */
+-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
++#if !defined(__STDC_NO_ATOMICS__) && \
++	((defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || \
++	 (defined(__cplusplus) && defined(__clang__) && \
++	  (__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 6))))
++#ifdef __cplusplus
++extern "C++" {
++#endif
+ #include <stdatomic.h>
++#ifdef __cplusplus
++}
++#endif
+ /*
+  * FY_HAVE_STDATOMIC_H - Defined when ``<stdatomic.h>`` is available.
+  *
