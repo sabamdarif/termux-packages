@@ -1,0 +1,358 @@
+diff --git a/src/backends/meson.build b/src/backends/meson.build
+index a412424..ec815df 100644
+--- a/src/backends/meson.build
++++ b/src/backends/meson.build
+@@ -9,3 +9,4 @@ subdir('alpinelinux')
+ subdir('archlinux')
+ subdir('rpmmd')
+ subdir('freebsd')
++subdir('termux')
+diff --git a/src/backends/termux/meson.build b/src/backends/termux/meson.build
+new file mode 100644
+index 0000000..38314a6
+--- /dev/null
++++ b/src/backends/termux/meson.build
+@@ -0,0 +1,7 @@
++
++backend_termux_src = files(
++  'terpkg.cpp',
++  'terpkgindex.cpp',
++)
++
++backends_src += backend_termux_src
+diff --git a/src/backends/termux/terpkg.cpp b/src/backends/termux/terpkg.cpp
+new file mode 100644
+index 0000000..edf4e13
+--- /dev/null
++++ b/src/backends/termux/terpkg.cpp
+@@ -0,0 +1,115 @@
++/*
++ * Copyright (C) 2016-2020 Canonical Ltd
++ * Author: Iain Lane <iain.lane@canonical.com>
++ *
++ * Licensed under the GNU Lesser General Public License Version 3
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the license, or
++ * (at your option) any later version.
++ *
++ * This software is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this software.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "terpkg.h"
++
++#include "../../config.h"
++#include "../../logging.h"
++#include "../../zarchive.h"
++#include "../../utils.h"
++
++namespace ASGenerator
++{
++
++TermuxPackage::TermuxPackage(
++    const std::string &pname,
++    const std::string &pver,
++    const std::string &parch,
++    std::shared_ptr<DebPackageLocaleTexts> l10nTexts)
++    : DebPackage(pname, pver, parch, std::move(l10nTexts)),
++      m_contentsRead(false),
++      m_dataArchive(std::make_unique<ArchiveDecompressor>())
++{
++    termuxUpdateTmpDirPath();
++}
++
++TermuxPackage::~TermuxPackage()
++{
++    termuxFinish();
++}
++
++void TermuxPackage::termuxUpdateTmpDirPath()
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++    const auto &conf = Config::get();
++    m_tmpDir = conf.getTmpDir() / std::format("termux-{}-{}_{}", name(), ver(), arch());
++}
++
++ArchiveDecompressor &TermuxPackage::openPayloadArchive()
++{
++    if (m_dataArchive->isOpen())
++        return *m_dataArchive;
++
++    ArchiveDecompressor ad;
++    // extract the payload to a temporary location first
++    ad.open(getFilename());
++    fs::create_directories(m_tmpDir);
++
++    const std::regex dataRegex(R"(data\.*)");
++    auto files = ad.extractFilesByRegex(dataRegex, m_tmpDir);
++    if (files.empty()) {
++        throw std::runtime_error(
++            std::format("Unable to find the payload tarball in Termux package: {}", getFilename()));
++    }
++    const std::string dataArchiveFname = files[0];
++
++    m_dataArchive->open(dataArchiveFname, m_tmpDir / "data");
++    m_dataArchive->setOptimizeRepeatedReads(true);
++    return *m_dataArchive;
++}
++
++const std::vector<std::string> &TermuxPackage::contents()
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++    if (m_contentsRead)
++        return m_contentsL;
++
++    auto &pa = openPayloadArchive();
++    m_contentsL = pa.readContents();
++    m_contentsRead = true;
++    return m_contentsL;
++}
++
++void TermuxPackage::termuxCleanupTemp()
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++
++    if (m_dataArchive->isOpen())
++        m_dataArchive->close();
++
++    if (m_tmpDir.empty())
++        return;
++
++    try {
++        if (fs::exists(m_tmpDir)) {
++            fs::remove_all(m_tmpDir);
++        }
++    } catch (const std::exception &e) {
++        // we ignore any error
++        logWarning("Unable to remove temporary directory: {} ({})", m_tmpDir.string(), e.what());
++    }
++}
++
++void TermuxPackage::termuxFinish()
++{
++    termuxCleanupTemp();
++}
++
++} // namespace ASGenerator
+diff --git a/src/backends/termux/terpkg.h b/src/backends/termux/terpkg.h
+new file mode 100644
+index 0000000..d45b6f6
+--- /dev/null
++++ b/src/backends/termux/terpkg.h
+@@ -0,0 +1,58 @@
++/*
++ * Copyright (C) 2016-2020 Canonical Ltd
++ * Author: Iain Lane <iain.lane@canonical.com>
++ *
++ * Licensed under the GNU Lesser General Public License Version 3
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the license, or
++ * (at your option) any later version.
++ *
++ * This software is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this software.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#pragma once
++
++#include "../debian/debpkg.h"
++
++namespace ASGenerator
++{
++
++class ArchiveDecompressor;
++
++class TermuxPackage : public DebPackage
++{
++public:
++    TermuxPackage(
++        const std::string &pname,
++        const std::string &pver,
++        const std::string &parch,
++        std::shared_ptr<DebPackageLocaleTexts> l10nTexts = nullptr);
++    ~TermuxPackage() override;
++
++    const std::vector<std::string> &contents() override;
++
++    void termuxCleanupTemp();
++    void termuxFinish();
++    void termuxUpdateTmpDirPath();
++
++private:
++    bool m_contentsRead;
++    std::vector<std::string> m_contentsL;
++
++    fs::path m_tmpDir;
++    std::unique_ptr<ArchiveDecompressor> m_dataArchive;
++
++    mutable std::mutex m_mutex;
++
++    ArchiveDecompressor &openPayloadArchive();
++};
++
++} // namespace ASGenerator
+diff --git a/src/backends/termux/terpkgindex.cpp b/src/backends/termux/terpkgindex.cpp
+new file mode 100644
+index 0000000..ef5fe45
+--- /dev/null
++++ b/src/backends/termux/terpkgindex.cpp
+@@ -0,0 +1,47 @@
++/*
++ * Copyright (C) 2016-2020 Canonical Ltd
++ * Author: Iain Lane <iain.lane@canonical.com>
++ *
++ * Licensed under the GNU Lesser General Public License Version 3
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the license, or
++ * (at your option) any later version.
++ *
++ * This software is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this software.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "terpkgindex.h"
++
++#include "../../logging.h"
++
++namespace ASGenerator
++{
++
++TermuxPackageIndex::TermuxPackageIndex(const std::string &dir)
++    : DebianPackageIndex(dir)
++{
++}
++
++std::shared_ptr<DebPackage> TermuxPackageIndex::newPackage(
++    const std::string &name,
++    const std::string &ver,
++    const std::string &arch)
++{
++    auto termuxPkg = std::make_shared<TermuxPackage>(name, ver, arch);
++    return std::static_pointer_cast<DebPackage>(termuxPkg);
++}
++
++std::string TermuxPackageIndex::dataPrefix() const
++{
++    return "/data/data/com.termux/files/usr";
++}
++
++} // namespace ASGenerator
+diff --git a/src/backends/termux/terpkgindex.h b/src/backends/termux/terpkgindex.h
+new file mode 100644
+index 0000000..ea64dcd
+--- /dev/null
++++ b/src/backends/termux/terpkgindex.h
+@@ -0,0 +1,41 @@
++/*
++ * Copyright (C) 2016-2020 Canonical Ltd
++ * Author: Iain Lane <iain.lane@canonical.com>
++ *
++ * Licensed under the GNU Lesser General Public License Version 3
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the license, or
++ * (at your option) any later version.
++ *
++ * This software is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this software.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#pragma once
++
++#include "../debian/debpkgindex.h"
++#include "terpkg.h"
++
++namespace ASGenerator
++{
++
++class TermuxPackageIndex : public DebianPackageIndex
++{
++public:
++    explicit TermuxPackageIndex(const std::string &dir);
++
++    std::string dataPrefix() const override;
++
++protected:
++    std::shared_ptr<DebPackage> newPackage(const std::string &name, const std::string &ver, const std::string &arch)
++        override;
++};
++
++} // namespace ASGenerator
+diff --git a/src/config.cpp b/src/config.cpp
+index 1ee92d8..4574a1a 100644
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -300,6 +300,10 @@ void Config::loadFromFile(
+         backendName = "FreeBSD";
+         backend = Backend::FreeBSD;
+         metadataType = DataType::XML;
++    } else if (backendId == "termux") {
++        backendName = "Termux";
++        backend = Backend::Termux;
++        metadataType = DataType::XML;
+     }
+ 
+     // override the backend's default metadata type if requested by user
+diff --git a/src/config.h b/src/config.h
+index ec5d5fe..f0d9010 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -79,7 +79,8 @@ enum class Backend {
+     Archlinux,
+     RpmMd,
+     Alpinelinux,
+-    FreeBSD
++    FreeBSD,
++    Termux
+ };
+ 
+ /**
+diff --git a/src/engine.cpp b/src/engine.cpp
+index 974e197..24d7ec3 100644
+--- a/src/engine.cpp
++++ b/src/engine.cpp
+@@ -58,6 +58,7 @@
+ #include "backends/archlinux/alpkgindex.h"
+ #include "backends/rpmmd/rpmpkgindex.h"
+ #include "backends/freebsd/fbsdpkgindex.h"
++#include "backends/termux/terpkgindex.h"
+ 
+ namespace ASGenerator
+ {
+@@ -96,6 +97,9 @@ Engine::Engine()
+     case Backend::FreeBSD:
+         m_pkgIndex = std::make_unique<FreeBSDPackageIndex>(m_conf->archiveRoot);
+         break;
++    case Backend::Termux:
++        m_pkgIndex = std::make_unique<TermuxPackageIndex>(m_conf->archiveRoot);
++        break;
+     default:
+         throw std::runtime_error("No backend specified, can not continue!");
+     }

@@ -1,0 +1,26 @@
+diff --git a/data/meson.build b/data/meson.build
+index 005793c..8f271d8 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -3,9 +3,10 @@
+ install_data('asgen-hints.json', install_dir: 'share/appstream')
+ install_data('hicolor-theme-index.theme', install_dir: 'share/appstream')
+ 
+-ascli_exe = find_program('appstreamcli', required: true)
++ascli_exe = find_program('appstreamcli', required: false)
+ 
+ metainfo_filename = 'org.freedesktop.appstream.generator.metainfo.xml'
++if ascli_exe.found()
+ metainfo_with_relinfo = custom_target('add-metainfo-releases',
+     input : ['../NEWS', files(metainfo_filename)],
+     output : [metainfo_filename],
+@@ -13,6 +14,9 @@ metainfo_with_relinfo = custom_target('add-metainfo-releases',
+     install : true,
+     install_dir : join_paths (get_option ('datadir'), 'metainfo')
+ )
++else
++install_data(metainfo_filename, install_dir : join_paths (get_option ('datadir'), 'metainfo'))
++endif
+ 
+ if ascli_exe.found()
+   # Validate our MetaInfo file

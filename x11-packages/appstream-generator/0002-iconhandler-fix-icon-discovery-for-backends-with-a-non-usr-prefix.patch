@@ -1,0 +1,36 @@
+diff --git a/src/engine.cpp b/src/engine.cpp
+index 24d7ec3..80fa039 100644
+--- a/src/engine.cpp
++++ b/src/engine.cpp
+@@ -903,7 +903,8 @@ bool Engine::processFile(
+             *m_cstore,
+             m_dstore->mediaExportPoolDir(),
+             getIconCandidatePackages(suite, sectionName, arch),
+-            suite.iconTheme);
++            suite.iconTheme,
++            m_pkgIndex->dataPrefix());
+         processPackages(pkgs, std::move(iconh), nullptr);
+     }
+ 
+diff --git a/src/iconhandler.cpp b/src/iconhandler.cpp
+index d3b1558..5192905 100644
+--- a/src/iconhandler.cpp
++++ b/src/iconhandler.cpp
+@@ -326,7 +326,7 @@ IconHandler::IconHandler(
+ 
+         // optimization: check if we actually have an interesting path before
+         // entering the slower loop below.
+-        if (!fname.starts_with("/usr/share/icons/") && (!m_extraPrefix.empty() && !fname.starts_with(extraIconsPath)))
++        if (!fname.starts_with("/usr/share/icons/") && (m_extraPrefix.empty() || !fname.starts_with(extraIconsPath)))
+             return;
+ 
+         auto pkg = getPackage(pkgid);
+@@ -370,7 +370,7 @@ IconHandler::IconHandler(
+                 indexData.resize(f.tellg());
+                 f.seekg(0, std::ios::beg);
+                 f.read(reinterpret_cast<char *>(indexData.data()), indexData.size());
+-                tmpThemes["hicolor"] = std::make_unique<Theme>("hicolor", indexData);
++                tmpThemes["hicolor"] = std::make_unique<Theme>("hicolor", indexData, m_extraPrefix);
+             }
+         }
+     }

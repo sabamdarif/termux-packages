@@ -1,0 +1,202 @@
+diff --git a/src/backends/archlinux/alpkgindex.cpp b/src/backends/archlinux/alpkgindex.cpp
+index 1da3748..f5e776c 100644
+--- a/src/backends/archlinux/alpkgindex.cpp
++++ b/src/backends/archlinux/alpkgindex.cpp
+@@ -69,7 +69,7 @@ std::vector<std::shared_ptr<ArchPackage>> ArchPackageIndex::loadPackages(
+ 
+     std::unordered_map<std::string, std::shared_ptr<ArchPackage>> pkgsMap;
+ 
+-    for (const auto &entry : ad.read()) {
++    ad.read([&](const ArchiveDecompressor::ArchiveEntry &entry) {
+         const auto archPkid = fs::path(entry.fname).parent_path().filename().string();
+ 
+         std::shared_ptr<ArchPackage> pkg;
+@@ -114,7 +114,7 @@ std::vector<std::shared_ptr<ArchPackage>> ArchPackageIndex::loadPackages(
+                 pkg->setContents(filesList);
+             }
+         }
+-    }
++    });
+ 
+     std::vector<std::shared_ptr<ArchPackage>> result;
+     result.reserve(pkgsMap.size());
+diff --git a/src/iconhandler.cpp b/src/iconhandler.cpp
+index 5192905..f44a27b 100644
+--- a/src/iconhandler.cpp
++++ b/src/iconhandler.cpp
+@@ -191,7 +191,7 @@ bool Theme::directoryMatchesSize(
+     return false;
+ }
+ 
+-std::generator<std::string> Theme::matchingIconFilenames(
++std::vector<std::string> Theme::matchingIconFilenames(
+     const std::string &iconName,
+     const ImageSize &size,
+     bool relaxedScalingRules) const
+@@ -199,19 +199,21 @@ std::generator<std::string> Theme::matchingIconFilenames(
+     // extensions to check for
+     static const std::array<std::string_view, 4> extensions = {"png", "svgz", "svg", "xpm"};
+ 
++    std::vector<std::string> filenames;
+     for (const auto &themedir : m_directories) {
+         if (directoryMatchesSize(themedir, size, relaxedScalingRules)) {
+             for (const auto &ext : extensions) {
+-                co_yield std::format(
++                filenames.push_back(std::format(
+                     "{}/share/icons/{}/{}/{}.{}",
+                     m_prefix,
+                     m_name,
+                     std::get<std::string>(themedir.at("path")),
+                     iconName,
+-                    ext);
++                    ext));
+             }
+         }
+     }
++    return filenames;
+ }
+ 
+ // IconHandler implementation
+@@ -438,14 +440,15 @@ bool IconHandler::iconAllowed(const std::string &iconName)
+     });
+ }
+ 
+-std::generator<std::string> IconHandler::possibleIconFilenames(
++std::vector<std::string> IconHandler::possibleIconFilenames(
+     const std::string &iconName,
+     const ImageSize &size,
+     bool relaxedScalingRules) const
+ {
++    std::vector<std::string> filenames;
+     for (const auto &theme : m_themes) {
+-        for (const auto &fname : theme->matchingIconFilenames(iconName, size, relaxedScalingRules))
+-            co_yield fname;
++        for (auto &fname : theme->matchingIconFilenames(iconName, size, relaxedScalingRules))
++            filenames.push_back(std::move(fname));
+     }
+ 
+     if (size.scale == 1 && size.width == 64) {
+@@ -453,23 +456,25 @@ std::generator<std::string> IconHandler::possibleIconFilenames(
+         // this is "wrong", but we support it for compatibility reasons.
+         // However, we only ever use it to satisfy the 64x64px requirement
+         for (const auto &extension : PossibleIconExts)
+-            co_yield std::format("/usr/share/icons/{}{}", iconName, extension);
++            filenames.push_back(std::format("/usr/share/icons/{}{}", iconName, extension));
+ 
+         // check pixmaps directory for icons
+         // we only ever use the pixmap directory contents to satisfy the minimum 64x64px icon
+         // requirement. Otherwise we get weird upscaling to higher sizes or HiDPI sizes happening,
+         // as later code tries to downscale "bigger" sizes.
+         for (const auto &extension : PossibleIconExts)
+-            co_yield std::format("/usr/share/pixmaps/{}{}", iconName, extension);
++            filenames.push_back(std::format("/usr/share/pixmaps/{}{}", iconName, extension));
+ 
+         // do the same things for the extra prefix directory, if we have one
+         if (!m_extraPrefix.empty()) {
+             for (const auto &extension : PossibleIconExts)
+-                co_yield std::format("{}/share/icons/{}{}", m_extraPrefix, iconName, extension);
++                filenames.push_back(std::format("{}/share/icons/{}{}", m_extraPrefix, iconName, extension));
+             for (const auto &extension : PossibleIconExts)
+-                co_yield std::format("{}/share/pixmaps/{}{}", m_extraPrefix, iconName, extension);
++                filenames.push_back(std::format("{}/share/pixmaps/{}{}", m_extraPrefix, iconName, extension));
+         }
+     }
++
++    return filenames;
+ }
+ 
+ std::unordered_map<ImageSize, IconHandler::IconFindResult> IconHandler::findIcons(
+diff --git a/src/iconhandler.h b/src/iconhandler.h
+index e2dff66..b1826f5 100644
+--- a/src/iconhandler.h
++++ b/src/iconhandler.h
+@@ -23,7 +23,6 @@
+ #include <vector>
+ #include <unordered_map>
+ #include <memory>
+-#include <generator>
+ #include <variant>
+ #include <mutex>
+ #include <appstream.h>
+@@ -67,11 +66,11 @@ public:
+         bool assumeThresholdScalable = false) const;
+ 
+     /**
+-     * Returns a generator of possible icon filenames that match @iconName and @size.
++     * Returns a list of possible icon filenames that match @iconName and @size.
+      * If @relaxedScalingRules is set to true, we scale down any bigger icon size, even
+      * if the theme definition would usually prohibit that.
+      */
+-    std::generator<std::string> matchingIconFilenames(
++    std::vector<std::string> matchingIconFilenames(
+         const std::string &iconName,
+         const ImageSize &size,
+         bool relaxedScalingRules = false) const;
+@@ -134,7 +133,7 @@ private:
+      * Generates potential filenames of the icon that is searched for in the
+      * given size.
+      */
+-    std::generator<std::string> possibleIconFilenames(
++    std::vector<std::string> possibleIconFilenames(
+         const std::string &iconName,
+         const ImageSize &size,
+         bool relaxedScalingRules = false) const;
+diff --git a/src/zarchive.cpp b/src/zarchive.cpp
+index 8649ffa..7b4f4a1 100644
+--- a/src/zarchive.cpp
++++ b/src/zarchive.cpp
+@@ -525,9 +525,9 @@ std::vector<std::string> ArchiveDecompressor::readContents()
+ }
+ 
+ /**
+- * Returns a generator to iterate over the contents of this tarball.
++ * Iterate over the contents of this tarball, invoking @entryCb for each entry.
+  */
+-std::generator<ArchiveDecompressor::ArchiveEntry> ArchiveDecompressor::read()
++void ArchiveDecompressor::read(const std::function<void(const ArchiveEntry &)> &entryCb)
+ {
+     archive_entry *en = nullptr;
+     ArchivePtr ar(openArchive(), archive_read_free);
+@@ -553,17 +553,17 @@ std::generator<ArchiveDecompressor::ArchiveEntry> ArchiveDecompressor::read()
+             // we cheat here and set the link target as data
+             // TODO: Proper handling of symlinks, e.g. by adding a filetype property to ArchiveEntry.
+             entry.data = std::vector<uint8_t>(linkTarget, linkTarget + std::strlen(linkTarget));
+-            co_yield entry;
++            entryCb(entry);
+             continue;
+         }
+ 
+         if (filetype != AE_IFREG) {
+-            co_yield entry;
++            entryCb(entry);
+             continue;
+         }
+ 
+         entry.data = readEntry(ar.get());
+-        co_yield entry;
++        entryCb(entry);
+     }
+ }
+ 
+diff --git a/src/zarchive.h b/src/zarchive.h
+index b0e489b..577d201 100644
+--- a/src/zarchive.h
++++ b/src/zarchive.h
+@@ -25,7 +25,7 @@
+ #include <optional>
+ #include <regex>
+ #include <mutex>
+-#include <generator>
++#include <functional>
+ 
+ struct archive;
+ 
+@@ -72,7 +72,7 @@ public:
+     std::vector<uint8_t> readData(const std::string &fname);
+     std::vector<std::string> extractFilesByRegex(const std::regex &re, const std::string &destdir);
+     std::vector<std::string> readContents();
+-    std::generator<ArchiveEntry> read();
++    void read(const std::function<void(const ArchiveEntry &)> &entryCb);
+ 
+ private:
+     std::string m_archiveFname;
