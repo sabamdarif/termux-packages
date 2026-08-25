@@ -1,0 +1,1604 @@
+From e53b76ac0d5691c1317e21525322109c627b83a5 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Thu, 23 Jul 2026 22:29:00 +0800
+Subject: [PATCH 01/15] Add
+ ghcr.io/leegao/mesa-wrapper-ci/wrapper-compiler:latest CI builder
+
+---
+ .github/workflows/build-termux.yml | 38 +++++++++++++++++++
+ .github/workflows/macos.yml        | 60 ------------------------------
+ 2 files changed, 38 insertions(+), 60 deletions(-)
+ create mode 100644 .github/workflows/build-termux.yml
+ delete mode 100644 .github/workflows/macos.yml
+
+From 14639584f74c5d4b31531717c1161341cc4628ff Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:45:22 +0800
+Subject: [PATCH 02/15] Add legacy ion interface handling and non-qcom heap
+ mask fallback
+
+---
+ src/vulkan/wrapper/wrapper_device_memory.c   | 123 ++++++++++++++++---
+ src/vulkan/wrapper/wrapper_physical_device.c |   6 +-
+ 2 files changed, 113 insertions(+), 16 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index 49855b0f42f..99801c9c610 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -10,6 +10,7 @@
+ #include <sys/mman.h>
+ #include <sys/ioctl.h>
+ #include <linux/dma-heap.h>
++#include <errno.h>
+ 
+ static int
+ safe_ioctl(int fd, unsigned long request, void *arg)
+@@ -35,28 +36,123 @@ dma_heap_alloc(int heap_fd, size_t size) {
+    return alloc_data.fd;
+ }
+ 
++// https://cs.android.com/android/kernel/superproject/+/common-android-4.9:common/drivers/staging/android/uapi/ion.h
++struct ion_allocation_data_1 {
++	size_t len;
++	size_t align;
++	unsigned int heap_id_mask;
++	unsigned int flags;
++	__u32 handle;
++};
++
++struct ion_fd_data_1 {
++	__u32 handle;
++	int fd;
++};
++
++struct ion_handle_data_1 {
++	__u32 handle;
++};
++
++#define ION_IOC_MAGIC       'I'
++#define ION_IOC_ALLOC_1       _IOWR(ION_IOC_MAGIC, 0, struct ion_allocation_data_1)
++#define ION_IOC_FREE_1        _IOWR(ION_IOC_MAGIC, 1, struct ion_handle_data_1)
++#define ION_IOC_MAP_1         _IOWR(ION_IOC_MAGIC, 2, struct ion_fd_data_1)
++#define ION_IOC_SHARE_1		   _IOWR(ION_IOC_MAGIC, 4, struct ion_fd_data_1)
++
++// https://cs.android.com/android/kernel/superproject/+/common-android-4.14:common/drivers/staging/android/uapi/ion.h
++struct ion_allocation_data_2 {
++   __u64 len;
++   __u32 heap_id_mask;
++   __u32 flags;
++   __u32 fd;
++   __u32 unused;
++};
++
++struct ion_heap_query_2 {
++	__u32 cnt; /* Total number of heaps to be copied */
++	__u32 reserved0; /* align to 64bits */
++	__u64 heaps; /* buffer to be populated */
++	__u32 reserved1;
++	__u32 reserved2;
++};
++
++#define ION_IOC_ALLOC_2       _IOWR(ION_IOC_MAGIC, 0, struct ion_allocation_data_2)
++#define ION_IOC_HEAP_QUERY_2     _IOWR(ION_IOC_MAGIC, 8, struct ion_heap_query_2)
++
+ static int
+-ion_heap_alloc(int heap_fd, size_t size) {
+-   struct ion_allocation_data {
+-      __u64 len;
+-      __u32 heap_id_mask;
+-      __u32 flags;
+-      __u32 fd;
+-      __u32 unused;
+-   } alloc_data = {
++ion_heap_alloc_2(int heap_fd, size_t size) {
++   struct ion_allocation_data_2 alloc_data = {
+       .len = size,
+-      /* ION_HEAP_SYSTEM | ION_SYSTEM_HEAP_ID */
++      /* ION_HEAP_SYSTEM | ION_SYSTEM_HEAP_ID (Qcom) */
+       .heap_id_mask = (1U << 0) | (1U << 25),
+-      .flags = 0, /* uncached */
++      .flags = 0,
+    };
+ 
+-   if (safe_ioctl(heap_fd, _IOWR('I', 0, struct ion_allocation_data),
+-                  &alloc_data) < 0)
+-      return -1;
++   if (safe_ioctl(heap_fd, ION_IOC_ALLOC_2, &alloc_data) < 0) {
++      alloc_data.heap_id_mask = 1U;
++      if (safe_ioctl(heap_fd, ION_IOC_ALLOC_2, &alloc_data) < 0) {
++         return -1;
++      }
++   }
+ 
+    return alloc_data.fd;
+ }
+ 
++static int
++ion_heap_alloc(int heap_fd, size_t size) {
++   static int ion_iface = 0;
++   if (!ion_iface) {
++      // See https://github.com/mirror/mesa/blob/e24dc5bd1e7fe6101bdc866fb16a15a8fcae1aae/src/freedreno/vulkan/tu_knl_kgsl.cc#L1789
++      struct ion_handle_data_1 probe = { .handle = 0 };
++      if (safe_ioctl(heap_fd, ION_IOC_FREE_1, &probe) >= 0 || errno != ENOTTY) {
++         ion_iface = 1;
++      } else {
++         ion_iface = 2;
++      }
++      WRAPPER_LOG("info", "Picking ion interface: %d", ion_iface);
++   }
++
++   if (ion_iface == 2) {
++      return ion_heap_alloc_2(heap_fd, size);
++   }
++
++   // see https://github.com/mirror/mesa/blob/e24dc5bd1e7fe6101bdc866fb16a15a8fcae1aae/src/freedreno/vulkan/tu_knl_kgsl.cc#L122
++   // bo_init_new_ion_legacy
++   struct ion_allocation_data_1 alloc_data = {
++      .len = size,
++      .align = 0,
++      .heap_id_mask = (1U << 0) | (1U << 25) /* QCom specific */,
++      .flags = 0,
++   };
++
++   if (safe_ioctl(heap_fd, ION_IOC_ALLOC_1, &alloc_data) < 0) {
++      alloc_data.align = 4096;
++      alloc_data.heap_id_mask = 1U;
++      if (safe_ioctl(heap_fd, ION_IOC_ALLOC_1, &alloc_data) < 0) {
++         return -1;
++      }
++   }
++
++   struct ion_fd_data_1 fd_data = {
++      .handle = alloc_data.handle,
++      .fd = -1,
++   };
++   if (safe_ioctl(heap_fd, ION_IOC_SHARE_1, &fd_data) < 0) {
++      int saved_errno = errno;
++      struct ion_handle_data_1 free_data = { .handle = alloc_data.handle };
++      safe_ioctl(heap_fd, ION_IOC_FREE_1, &free_data);
++      WRAPPER_LOG("error", "Failed to share handle, errno=%d", alloc_data.handle, saved_errno);
++      errno = saved_errno;
++      return -1;
++   }
++
++   struct ion_handle_data_1 free_data = { .handle = alloc_data.handle };
++   safe_ioctl(heap_fd, ION_IOC_FREE_1, &free_data);
++
++   return fd_data.fd;
++}
++
+ static int
+ wrapper_dmabuf_alloc(struct wrapper_device *device, size_t size)
+ {
+@@ -539,4 +635,3 @@ wrapper_UnmapMemory2KHR(VkDevice _device,
+    mem->map_address = NULL;
+    return VK_SUCCESS;
+ }
+-
+diff --git a/src/vulkan/wrapper/wrapper_physical_device.c b/src/vulkan/wrapper/wrapper_physical_device.c
+index fca5a79ae53..988cc936690 100644
+--- a/src/vulkan/wrapper/wrapper_physical_device.c
++++ b/src/vulkan/wrapper/wrapper_physical_device.c
+@@ -313,8 +313,10 @@ VkResult enumerate_physical_device(struct vk_instance *_instance)
+       else
+          pdevice->dma_heap_fd = open("/dev/dma_heap/system-uncached", O_RDONLY | O_CLOEXEC);
+          
+-      if (pdevice->dma_heap_fd < 0)
++      if (pdevice->dma_heap_fd < 0) {
++         WRAPPER_LOG("info", "dmabuf heap not found, falling back to /dev/ion");
+          pdevice->dma_heap_fd = open("/dev/ion", O_RDONLY);
++      }
+ 
+       char *wrapper_resource_type = getenv("WRAPPER_RESOURCE_TYPE");
+ 
+@@ -758,4 +760,4 @@ wrapper_GetPhysicalDeviceMemoryProperties2(VkPhysicalDevice physicalDevice,
+ 
+    if (wrapper_vmem_max_size > 0)
+       pMemoryProperties->memoryProperties.memoryHeaps[0].size = (VkDeviceSize)wrapper_vmem_max_size * 1048576;
+-}								
++}
+
+From b6f305af9f7721b80b8eb1a096592c73a1c44d58 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:47:45 +0800
+Subject: [PATCH 03/15] Fix up compatible memory check for ion-heap-fd
+
+---
+ src/vulkan/wrapper/wrapper_device_memory.c | 41 +++++++++++++++++-----
+ 1 file changed, 33 insertions(+), 8 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index 99801c9c610..d7993dab3e3 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -142,7 +142,7 @@ ion_heap_alloc(int heap_fd, size_t size) {
+       int saved_errno = errno;
+       struct ion_handle_data_1 free_data = { .handle = alloc_data.handle };
+       safe_ioctl(heap_fd, ION_IOC_FREE_1, &free_data);
+-      WRAPPER_LOG("error", "Failed to share handle, errno=%d", alloc_data.handle, saved_errno);
++      WRAPPER_LOG("error", "Failed to share handle, errno=%d", saved_errno);
+       errno = saved_errno;
+       return -1;
+    }
+@@ -166,7 +166,6 @@ wrapper_dmabuf_alloc(struct wrapper_device *device, size_t size)
+    return fd;
+ }
+ 
+-
+ uint32_t
+ wrapper_select_device_memory_type(struct wrapper_device *device,
+                                   VkMemoryPropertyFlags flags) {
+@@ -182,6 +181,26 @@ wrapper_select_device_memory_type(struct wrapper_device *device,
+    return idx < props->memoryTypeCount ? idx : UINT32_MAX;
+ }
+ 
++static uint32_t
++wrapper_select_allowed_device_memory_type(struct wrapper_device *device,
++                                          uint32_t allowed_type_bits,
++                                          VkMemoryPropertyFlags flags) {
++   VkPhysicalDeviceMemoryProperties *props =
++      &device->physical->memory_properties;
++   int idx;
++
++   for (idx = 0; idx < props->memoryTypeCount; idx++) {
++      if (!(allowed_type_bits & (1U << idx))) {
++         continue;
++      }
++
++      if (props->memoryTypes[idx].propertyFlags & flags) {
++         return idx;
++      }
++   }
++   return UINT32_MAX;
++}
++
+ static VkResult
+ wrapper_allocate_memory_dmaheap(struct wrapper_device *device,
+                                 const VkMemoryAllocateInfo* pAllocateInfo,
+@@ -209,6 +228,17 @@ wrapper_allocate_memory_dmaheap(struct wrapper_device *device,
+       return VK_ERROR_INVALID_EXTERNAL_HANDLE;
+    }
+ 
++   int memory_type_index = wrapper_select_allowed_device_memory_type(device,
++      memory_fd_props.memoryTypeBits,
++      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
++      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
++      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
++
++   if (memory_type_index == UINT32_MAX) {
++      WRAPPER_LOG(error, "No compatible memory type found for fd %d", *out_fd);
++      return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++   }
++
+    import_fd_info = (VkImportMemoryFdInfoKHR) {
+       .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+       .pNext = pAllocateInfo->pNext,
+@@ -217,12 +247,7 @@ wrapper_allocate_memory_dmaheap(struct wrapper_device *device,
+    };
+    allocate_info = *pAllocateInfo;
+    allocate_info.pNext = &import_fd_info;
+-   allocate_info.memoryTypeIndex =
+-      wrapper_select_device_memory_type(device,
+-         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+-         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+-         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+-         memory_fd_props.memoryTypeBits);
++   allocate_info.memoryTypeIndex = memory_type_index;
+ 
+    result = device->dispatch_table.AllocateMemory(
+       device->dispatch_handle, &allocate_info,
+
+From b72338fe73885c9256a320ab145eee268e758f06 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:49:12 +0800
+Subject: [PATCH 04/15] Add direct-rendering support to Mali by emulating bgra8
+ framebuffers
+
+1. X11 requires framebuffers in bgra8 format.
+2. Mali can only support direct-rendering on rgba8 format (unlike Qcom)
+3. Blitting is also broken when opaque-fd is not available on pre-5.10
+   GKI kernels
+
+All of these can be solved by enabling DRI (AHB framebuffers) on Mali,
+via emulating bgra8
+
+Design sketch: allocate back buffer images backed physically by rgba8
+device memory, but allow WSI to read this back as bgra8 (during
+vkCreateImageView - by creating the backing images with
+VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT)
+
+TODO: certain flows (direct memory copies) are still brittle
+---
+ src/vulkan/wsi/wsi_common.c         | 28 ++++++++++++++++++---
+ src/vulkan/wsi/wsi_common.h         |  1 +
+ src/vulkan/wsi/wsi_common_android.c | 26 +++++++++++++++++---
+ src/vulkan/wsi/wsi_common_x11.c     | 38 ++++++++++++++++++++++++++---
+ 4 files changed, 83 insertions(+), 10 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 6e586e0e1fc..65e97fd817a 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -119,9 +119,12 @@ wsi_device_init(struct wsi_device *wsi,
+       .pNext = &pddp,
+    };
+    GetPhysicalDeviceProperties2(pdevice, &wsi->properties2);
+-   
+-   if (pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY)
+-      wsi->needs_blit = true;
++
++   static int emulate_bgra8 = -1;
++   if (emulate_bgra8 == -1)
++      emulate_bgra8 = getenv("WRAPPER_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_EMULATE_BGRA8")) : 1;
++
++   wsi->emulate_bgra8 = pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY && emulate_bgra8;
+ 
+    wsi->maxImageDimension2D = wsi->properties2.properties.limits.maxImageDimension2D;
+    assert(wsi->properties2.properties.limits.optimalBufferCopyRowPitchAlignment <= UINT32_MAX);
+@@ -666,6 +669,15 @@ wsi_configure_image(const struct wsi_swapchain *chain,
+       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+ 
++   if (chain->wsi->emulate_bgra8) {
++      // TODO(leegao): actually add the convertible formats
++      // The WSI emulation on x11 will still attach an ImageView for bgra8
++      // but Mali can only support direct rendering on rgba8
++      // This is a workaround so WSI can vkCreateImageView of bgra8 views
++      // over physical rgba8 vkImages backed by an AHB on Mali
++      info->create.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
++   }
++
+    if (handle_types != 0) {
+       info->ext_mem = (VkExternalMemoryImageCreateInfo) {
+          .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+@@ -1052,6 +1064,16 @@ wsi_CreateSwapchainKHR(VkDevice _device,
+ 
+    VkSwapchainCreateInfoKHR info = *pCreateInfo;
+ 
++   if (wsi_device->emulate_bgra8) {
++      if (info.imageFormat == VK_FORMAT_B8G8R8A8_UNORM) {
++         WRAPPER_LOG(info, "wsi_CreateSwapchainKHR: Emulating B8G8R8A8_UNORM framebuffers on Mali");
++         info.imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
++      } else if (info.imageFormat == VK_FORMAT_B8G8R8A8_SRGB) {
++         WRAPPER_LOG(info, "wsi_CreateSwapchainKHR: Emulating B8G8R8A8_UNORM framebuffers on Mali");
++         info.imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
++      }
++   }
++
+    if (wsi_device->force_swapchain_to_currentExtent) {
+       VkSurfaceCapabilities2KHR caps2 = {
+          .sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+diff --git a/src/vulkan/wsi/wsi_common.h b/src/vulkan/wsi/wsi_common.h
+index bb03e2f42cd..eb9d5546df7 100644
+--- a/src/vulkan/wsi/wsi_common.h
++++ b/src/vulkan/wsi/wsi_common.h
+@@ -183,6 +183,7 @@ struct wsi_device {
+    bool forcesync;
+ 
+    bool needs_blit;
++   bool emulate_bgra8;
+ 
+    /* Set to true if the implementation is ok with linear WSI images. */
+    bool wants_linear;
+diff --git a/src/vulkan/wsi/wsi_common_android.c b/src/vulkan/wsi/wsi_common_android.c
+index 6220559fed6..b2c353a443e 100644
+--- a/src/vulkan/wsi/wsi_common_android.c
++++ b/src/vulkan/wsi/wsi_common_android.c
+@@ -5,6 +5,7 @@
+ 
+ #include <android/hardware_buffer.h>
+ 
++#define AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM 1
+ #define AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM 5
+ 
+ static enum wsi_swapchain_blit_type
+@@ -13,12 +14,15 @@ wsi_get_ahardware_buffer_blit_type(const struct wsi_device *wsi,
+ {
+    AHardwareBuffer *ahardware_buffer;
+    VkResult result;
++   uint32_t probe_format = wsi->emulate_bgra8
++         ? AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM
++         : AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM;
+    
+    if (AHardwareBuffer_allocate(&(AHardwareBuffer_Desc){
+       .width = 500,
+       .height = 500,
+       .layers = 1,
+-      .format = AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM,
++      .format = probe_format,
+       .usage = AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER |
+                AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE |
+                AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN |
+@@ -83,6 +87,7 @@ wsi_get_ahardware_buffer_blit_type(const struct wsi_device *wsi,
+       return WSI_SWAPCHAIN_IMAGE_BLIT;
+    }
+ 
++   WRAPPER_LOG(info, "wsi_get_ahardware_buffer_blit_type: WSI_SWAPCHAIN_NO_BLIT");
+    return WSI_SWAPCHAIN_NO_BLIT;
+ }
+ 
+@@ -302,6 +307,9 @@ wsi_create_ahardware_buffer_blit_context(const struct wsi_swapchain *chain,
+ inline static uint32_t
+ to_ahardware_buffer_format(VkFormat format) {
+    switch (format) {
++   case VK_FORMAT_R8G8B8A8_SRGB:
++   case VK_FORMAT_R8G8B8A8_UNORM:
++      return AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+       return AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM;
+@@ -336,7 +344,20 @@ wsi_configure_ahardware_buffer_image(const struct wsi_swapchain *chain,
+       wsi_destroy_image_info(chain, info);
+       return VK_ERROR_OUT_OF_HOST_MEMORY;
+    }
+-   
++
++   // WARNING: The secondary AHB MUST be declared as AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM
++   // to allow certain mobile drivers to import it, but X11 treats its memory backing
++   // as physical [B, G, R, A] (in reverse order).
++   //
++   // We CANNOT use vkCmdBlitImage: Vulkan will detect the format mismatch between
++   // B8G8R8A8 (primary) and R8G8B8A8 (secondary) and perform an automatic channel swizzle
++   // [B,G,R,A] -> [R,G,B,A], which breaks X11's expected layout.
++   //
++   // We MUST use vkCmdCopyImage for a pure bitwise copy, and force the primary image
++   // to B8G8R8A8 upfront so the rendered memory is already in [B, G, R, A] order.
++   //
++   // Similarly, we CANNOT advertise an [R,G,B,A] format for the primary image without
++   // a design to copy+swizzle the blit from the primary to the secondary.
+    *info->ahardware_buffer_desc = (AHardwareBuffer_Desc) {
+       .width = pCreateInfo->imageExtent.width,
+       .height = pCreateInfo->imageExtent.height,
+@@ -382,4 +403,3 @@ wsi_configure_android_image(
+ 
+    return VK_SUCCESS;
+ }
+-
+diff --git a/src/vulkan/wsi/wsi_common_x11.c b/src/vulkan/wsi/wsi_common_x11.c
+index 324419383be..21d3d0c05c9 100644
+--- a/src/vulkan/wsi/wsi_common_x11.c
++++ b/src/vulkan/wsi/wsi_common_x11.c
+@@ -443,6 +443,12 @@ wsi_x11_get_connection(struct wsi_device *wsi_dev,
+    return entry->data;
+ }
+ 
++// WARNING: this is the primary image format list
++// When blitting, we CANNOT advertise R8G8B8A8 as the secondary
++// image expects the physical layout order of the primary image
++// to ALWAYS be B8G8R8A8_UNORM, regardless of the advertised format.
++// Until we can swizzle+copy the image (and we cannot use a vkCmdBlitImage)
++// we must always advertise B8G8R8A8_UNORM as the primary image format.
+ static const VkFormat formats[] = {
+    VK_FORMAT_R5G6B5_UNORM_PACK16,
+    VK_FORMAT_B8G8R8A8_SRGB,
+@@ -903,11 +909,22 @@ x11_surface_get_formats(VkIcdSurfaceBase *surface,
+    if (!get_sorted_vk_formats(surface, wsi_device, sorted_formats, &count))
+       return VK_ERROR_SURFACE_LOST_KHR;
+ 
+-   for (unsigned i = 0; i < count; i++) {
++   if (wsi_device->emulate_bgra8) {
+       vk_outarray_append_typed(VkSurfaceFormatKHR, &out, f) {
+-         f->format = sorted_formats[i];
++         f->format = VK_FORMAT_B8G8R8A8_UNORM;
+          f->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+       }
++      vk_outarray_append_typed(VkSurfaceFormatKHR, &out, f) {
++         f->format = VK_FORMAT_B8G8R8A8_SRGB;
++         f->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++      }
++   } else {
++      for (unsigned i = 0; i < count; i++) {
++         vk_outarray_append_typed(VkSurfaceFormatKHR, &out, f) {
++            f->format = sorted_formats[i];
++            f->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++         }
++      }
+    }
+ 
+    return vk_outarray_status(&out);
+@@ -928,12 +945,25 @@ x11_surface_get_formats2(VkIcdSurfaceBase *surface,
+    if (!get_sorted_vk_formats(surface, wsi_device, sorted_formats, &count))
+       return VK_ERROR_SURFACE_LOST_KHR;
+ 
+-   for (unsigned i = 0; i < count; i++) {
++   if (wsi_device->emulate_bgra8) {
+       vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, f) {
+          assert(f->sType == VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR);
+-         f->surfaceFormat.format = sorted_formats[i];
++         f->surfaceFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+          f->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+       }
++      vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, f) {
++         assert(f->sType == VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR);
++         f->surfaceFormat.format = VK_FORMAT_B8G8R8A8_SRGB;
++         f->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++      }
++   } else {
++      for (unsigned i = 0; i < count; i++) {
++         vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, f) {
++            assert(f->sType == VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR);
++            f->surfaceFormat.format = sorted_formats[i];
++            f->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++         }
++      }
+    }
+ 
+    return vk_outarray_status(&out);
+
+From e7efa5a1014fbbbf304416c9e6df066ad4f61614 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:50:28 +0800
+Subject: [PATCH 05/15] Don't strip VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT during
+ the creation of the primary frame buffer in the AHB flow
+
+---
+ src/vulkan/wsi/wsi_common_android.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/vulkan/wsi/wsi_common_android.c b/src/vulkan/wsi/wsi_common_android.c
+index b2c353a443e..e82ded01ab9 100644
+--- a/src/vulkan/wsi/wsi_common_android.c
++++ b/src/vulkan/wsi/wsi_common_android.c
+@@ -134,7 +134,7 @@ wsi_create_ahardware_buffer_image_mem(const struct wsi_swapchain *chain,
+    }
+ 
+    VkImageCreateInfo new_image_create_info = info->create;
+-   if (ahardware_buffer_format_props.externalFormat)
++   if (ahardware_buffer_format_props.externalFormat && !wsi->emulate_bgra8)
+       new_image_create_info.flags &=
+          ~VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    new_image_create_info.format = ahardware_buffer_format_props.format;
+
+From c63543c10b90ab59491294f2cee11f1230658eef Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:53:59 +0800
+Subject: [PATCH 06/15] Default emulate_bgra8 to only run on 32bit games
+
+Design: check WINEPRELOADRESERVE to see if the base address is <
+0xFFFFFFFF
+---
+ src/vulkan/wsi/wsi_common.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 65e97fd817a..45e64657bd0 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -122,9 +122,25 @@ wsi_device_init(struct wsi_device *wsi,
+ 
+    static int emulate_bgra8 = -1;
+    if (emulate_bgra8 == -1)
+-      emulate_bgra8 = getenv("WRAPPER_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_EMULATE_BGRA8")) : 1;
++      emulate_bgra8 = getenv("WRAPPER_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_EMULATE_BGRA8")) : 0;
+ 
+-   wsi->emulate_bgra8 = pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY && emulate_bgra8;
++   const char *wine_preload_reserve = getenv("WINEPRELOADRESERVE"); // e.g. 000400000-0008b4000 or 140000000-1400a8000
++   bool is_win32 = false;
++
++   if (wine_preload_reserve && *wine_preload_reserve) {
++       char *end_ptr = NULL;
++       uint64_t base_addr = strtoull(wine_preload_reserve, &end_ptr, 16);
++
++       if (end_ptr != wine_preload_reserve) {
++           is_win32 = (base_addr < 0xFFFFFFFFULL);
++       }
++   }
++
++   WRAPPER_LOG(info, "is_win32=%d, WINEPRELOADRESERVE=%s",
++      is_win32, wine_preload_reserve ? wine_preload_reserve : "nullptr");
++
++   // TODO(leegao): enable generally for all Mali devices (enables direct rendering on Mali)
++   wsi->emulate_bgra8 = (pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY && is_win32) || emulate_bgra8;
+ 
+    wsi->maxImageDimension2D = wsi->properties2.properties.limits.maxImageDimension2D;
+    assert(wsi->properties2.properties.limits.optimalBufferCopyRowPitchAlignment <= UINT32_MAX);
+
+From 5d6b634e11cf6341ac5279b60f5152b4a449ed54 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:56:47 +0800
+Subject: [PATCH 07/15] Track if a wrapper_image is an emulated bgra8
+ framebuffer
+
+---
+ src/vulkan/wrapper/wrapper_device.c   | 15 ++++++++++++++-
+ src/vulkan/wrapper/wrapper_instance.c |  1 +
+ src/vulkan/wrapper/wrapper_private.h  | 12 +++++++++++-
+ src/vulkan/wsi/wsi_common_android.c   |  9 +++++++++
+ 4 files changed, 35 insertions(+), 2 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index 8b7ce627418..06e42921827 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -48,7 +48,7 @@ get_wrapper_buffer_from_handle(struct wrapper_device *device, VkBuffer buffer) {
+    return wb;
+ }
+ 
+-static struct wrapper_image *
++struct wrapper_image *
+ get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image) {
+    struct wrapper_image *wi = NULL;
+    
+@@ -499,6 +499,18 @@ wrapper_CreateImage(VkDevice _device,
+    VK_FROM_HANDLE(wrapper_device, device, _device);
+    VkResult res;
+    VkImageCreateInfo create_info = *pCreateInfo;
++   bool is_emulated_bgra8 = false;
++
++   // Wrapper specific extension for B8G8R8A8 AHB img emulation for the swapchain
++   VkBaseInStructure *prev = (VkBaseInStructure *) pCreateInfo;
++   for (const VkBaseInStructure *s = pCreateInfo->pNext; s; s = s->pNext) {
++      if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT) {
++         is_emulated_bgra8 = true;
++         prev->pNext = s->pNext; // unlink
++         break;
++      }
++      prev = (VkBaseInStructure *) s;
++   }
+ 
+    if (is_emulated_bcn(device->physical, pCreateInfo->format)) {
+       create_info.format = get_format_for_bcn(pCreateInfo->format);
+@@ -528,6 +540,7 @@ wrapper_CreateImage(VkDevice _device,
+    wi->device = device;
+    wi->info = *pCreateInfo;
+    wi->dispatch_handle = *pImage;
++   wi->is_emulated_bgra8 = is_emulated_bgra8;
+ 
+    list_add(&wi->link, &device->image_list);
+    _mesa_hash_table_u64_insert(device->image_table, (uint64_t)wi->dispatch_handle, wi);
+diff --git a/src/vulkan/wrapper/wrapper_instance.c b/src/vulkan/wrapper/wrapper_instance.c
+index cf6838f5b78..cba310556bd 100644
+--- a/src/vulkan/wrapper/wrapper_instance.c
++++ b/src/vulkan/wrapper/wrapper_instance.c
+@@ -8,6 +8,7 @@
+ #include "vk_common_entrypoints.h"
+ #include "vk_dispatch_table.h"
+ #include "vk_extensions.h"
++#include "adrenotools/driver.h"
+ 
+ const struct vk_instance_extension_table wrapper_instance_extensions = {
+    .KHR_get_surface_capabilities2 = true,
+diff --git a/src/vulkan/wrapper/wrapper_private.h b/src/vulkan/wrapper/wrapper_private.h
+index 1f8271a2b8e..e54e376ff11 100644
+--- a/src/vulkan/wrapper/wrapper_private.h
++++ b/src/vulkan/wrapper/wrapper_private.h
+@@ -14,7 +14,6 @@
+ #include "vulkan/wsi/wsi_common.h"
+ #include "util/simple_mtx.h"
+ #include "util/hash_table.h"
+-#include "adrenotools/driver.h"
+ 
+ extern const struct vk_instance_extension_table wrapper_instance_extensions;
+ extern const struct vk_device_extension_table wrapper_device_extensions;
+@@ -94,6 +93,12 @@ struct wrapper_buffer {
+    struct wrapper_command_buffer *wcb;
+ };
+ 
++#define VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT 1000701234
++typedef struct VkEmulatedB8G8R8A8CreateInfoExt {
++    VkStructureType          sType;
++    const void*              pNext;
++} VkEmulatedB8G8R8A8CreateInfoExt;
++
+ struct wrapper_image {
+    struct vk_image vk;
+ 
+@@ -101,8 +106,13 @@ struct wrapper_image {
+    struct list_head link;
+    VkImage dispatch_handle;
+    VkImageCreateInfo info;
++
++   bool is_emulated_bgra8;
+ };
+ 
++struct wrapper_image *
++get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image);
++
+ struct wrapper_fence {
+ 	struct vk_fence vk;
+ 
+diff --git a/src/vulkan/wsi/wsi_common_android.c b/src/vulkan/wsi/wsi_common_android.c
+index e82ded01ab9..e1e963ba29d 100644
+--- a/src/vulkan/wsi/wsi_common_android.c
++++ b/src/vulkan/wsi/wsi_common_android.c
+@@ -2,6 +2,7 @@
+ #include "wsi_common_private.h"
+ #include "vk_log.h"
+ #include "../wrapper/wrapper_log.h"
++#include "../wrapper/wrapper_private.h"
+ 
+ #include <android/hardware_buffer.h>
+ 
+@@ -139,6 +140,14 @@ wsi_create_ahardware_buffer_image_mem(const struct wsi_swapchain *chain,
+          ~VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    new_image_create_info.format = ahardware_buffer_format_props.format;
+ 
++   VkEmulatedB8G8R8A8CreateInfoExt emulated_bgra8_ext = {
++      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT,
++      .pNext = new_image_create_info.pNext,
++   };
++   if (wsi->emulate_bgra8) {
++      new_image_create_info.pNext = &emulated_bgra8_ext;
++   }
++
+    result = wsi->CreateImage(chain->device,
+                              &new_image_create_info,
+                              &chain->alloc, &image->image);
+
+From cabc311c1328d990358248ccc83f9aff7de63365 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 21:58:58 +0800
+Subject: [PATCH 08/15] Log when vkCmdBlitImage is called on an emulated bgra8
+ framebuffer
+
+---
+ src/vulkan/wrapper/wrapper_device.c | 42 +++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index 06e42921827..0fb7a678d79 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -1042,6 +1042,48 @@ wrapper_CmdCopyBufferToImage(VkCommandBuffer commandBuffer,
+    simple_mtx_unlock(&device->resource_mutex);
+ }
+ 
++VKAPI_ATTR void VKAPI_CALL 
++wrapper_CmdBlitImage(
++    VkCommandBuffer commandBuffer,
++    VkImage srcImage, VkImageLayout srcImageLayout,
++    VkImage dstImage, VkImageLayout dstImageLayout,
++    uint32_t regionCount, const VkImageBlit* pRegions,
++    VkFilter filter)
++{
++   VK_FROM_HANDLE(wrapper_command_buffer, wcb, commandBuffer);
++   struct wrapper_device *device = wcb->device;
++   struct wrapper_image *dst_img = get_wrapper_image_from_handle(device, dstImage);
++   const VkImageBlit *regions = (const VkImageBlit *)pRegions;
++
++   if (dst_img && dst_img->is_emulated_bgra8) {
++      WRAPPER_LOG(error, "vkCmdBlitImage with is_emulated_bgra8 image");
++   }
++
++   device->dispatch_table.CmdBlitImage(
++      wcb->dispatch_handle,
++      srcImage, srcImageLayout,
++      dstImage, dstImageLayout,
++      regionCount, regions, filter);
++}
++
++VKAPI_ATTR void VKAPI_CALL
++wrapper_CmdBlitImage2(
++    VkCommandBuffer commandBuffer,
++    const VkBlitImageInfo2 *pBlitImageInfo)
++{
++   VK_FROM_HANDLE(wrapper_command_buffer, wcb, commandBuffer);
++   struct wrapper_device *device = wcb->device;
++   struct wrapper_image *dst_img = get_wrapper_image_from_handle(device, pBlitImageInfo->dstImage);
++
++   if (dst_img && dst_img->is_emulated_bgra8) {
++      WRAPPER_LOG(error, "vkCmdBlitImage2 with is_emulated_bgra8 image");
++   }
++
++   if (device->dispatch_table.CmdBlitImage2) {
++      device->dispatch_table.CmdBlitImage2(wcb->dispatch_handle, pBlitImageInfo);
++   }
++}
++
+ VKAPI_ATTR void VKAPI_CALL
+ wrapper_FreeCommandBuffers(VkDevice _device,
+                            VkCommandPool commandPool,
+
+From 00729c3157d061fbfdbc4d105631bda0ac43619e Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 22:00:03 +0800
+Subject: [PATCH 09/15] Add WRAPPER_DONT_EMULATE_BGRA8 as a killswitch
+
+---
+ src/vulkan/wsi/wsi_common.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 45e64657bd0..cdd46069535 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -120,10 +120,6 @@ wsi_device_init(struct wsi_device *wsi,
+    };
+    GetPhysicalDeviceProperties2(pdevice, &wsi->properties2);
+ 
+-   static int emulate_bgra8 = -1;
+-   if (emulate_bgra8 == -1)
+-      emulate_bgra8 = getenv("WRAPPER_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_EMULATE_BGRA8")) : 0;
+-
+    const char *wine_preload_reserve = getenv("WINEPRELOADRESERVE"); // e.g. 000400000-0008b4000 or 140000000-1400a8000
+    bool is_win32 = false;
+ 
+@@ -139,8 +135,16 @@ wsi_device_init(struct wsi_device *wsi,
+    WRAPPER_LOG(info, "is_win32=%d, WINEPRELOADRESERVE=%s",
+       is_win32, wine_preload_reserve ? wine_preload_reserve : "nullptr");
+ 
+-   // TODO(leegao): enable generally for all Mali devices (enables direct rendering on Mali)
+-   wsi->emulate_bgra8 = (pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY && is_win32) || emulate_bgra8;
++   static int emulate_bgra8 = -1;
++   if (emulate_bgra8 == -1) {
++      // TODO(leegao): enable generally for all Mali devices (enables direct rendering on Mali)
++      bool is_mali_win32 = pddp.driverID == VK_DRIVER_ID_ARM_PROPRIETARY && is_win32;
++      emulate_bgra8 = getenv("WRAPPER_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_EMULATE_BGRA8")) : is_mali_win32;
++      int dont_emulate_bgra8 = getenv("WRAPPER_DONT_EMULATE_BGRA8") ? atoi(getenv("WRAPPER_DONT_EMULATE_BGRA8")) : 0;
++      if (dont_emulate_bgra8) emulate_bgra8 = 0;
++   }
++
++   wsi->emulate_bgra8 = emulate_bgra8;
+ 
+    wsi->maxImageDimension2D = wsi->properties2.properties.limits.maxImageDimension2D;
+    assert(wsi->properties2.properties.limits.optimalBufferCopyRowPitchAlignment <= UINT32_MAX);
+
+From adc73682d98d52337cdfe3407bc4713f9c166a97 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Wed, 22 Jul 2026 23:05:03 +0800
+Subject: [PATCH 10/15] Fix blit for Mali on win32
+
+In particular, if EXT_map_memory_placed emulation fails for memory
+backing a swapchain image, then we'll just skip it and fallback instead
+of erroring.
+---
+ src/vulkan/wrapper/wrapper_device.c        | 12 +++++++++
+ src/vulkan/wrapper/wrapper_device_memory.c | 30 +++++++++++++++++++++-
+ src/vulkan/wrapper/wrapper_private.h       |  1 +
+ 3 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index 0fb7a678d79..9231d77b05d 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -500,6 +500,7 @@ wrapper_CreateImage(VkDevice _device,
+    VkResult res;
+    VkImageCreateInfo create_info = *pCreateInfo;
+    bool is_emulated_bgra8 = false;
++   bool is_wsi_image = false;
+ 
+    // Wrapper specific extension for B8G8R8A8 AHB img emulation for the swapchain
+    VkBaseInStructure *prev = (VkBaseInStructure *) pCreateInfo;
+@@ -512,6 +513,16 @@ wrapper_CreateImage(VkDevice _device,
+       prev = (VkBaseInStructure *) s;
+    }
+ 
++   // Tag swapchain images using VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA
++   prev = (VkBaseInStructure *) pCreateInfo;
++   for (const VkBaseInStructure *s = pCreateInfo->pNext; s; s = s->pNext) {
++      if (s->sType == VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA) {
++         is_wsi_image = true;
++         break;
++      }
++      prev = (VkBaseInStructure *) s;
++   }
++
+    if (is_emulated_bcn(device->physical, pCreateInfo->format)) {
+       create_info.format = get_format_for_bcn(pCreateInfo->format);
+       if (create_info.flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT)
+@@ -541,6 +552,7 @@ wrapper_CreateImage(VkDevice _device,
+    wi->info = *pCreateInfo;
+    wi->dispatch_handle = *pImage;
+    wi->is_emulated_bgra8 = is_emulated_bgra8;
++   wi->is_wsi_image = is_wsi_image;
+ 
+    list_add(&wi->link, &device->image_list);
+    _mesa_hash_table_u64_insert(device->image_table, (uint64_t)wi->dispatch_handle, wi);
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index d7993dab3e3..9a16e589ffe 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -463,6 +463,22 @@ wrapper_AllocateMemory(VkDevice _device,
+    if (vk_find_struct_const(pAllocateInfo, EXPORT_MEMORY_ALLOCATE_INFO))
+       goto fallback;
+ 
++   const VkMemoryDedicatedAllocateInfo *dedicated_allocate_info =
++         vk_find_struct_const((void*) pAllocateInfo->pNext, MEMORY_DEDICATED_ALLOCATE_INFO);
++   
++   static int bypass_swapchains = -1;
++   if (bypass_swapchains == -1) 
++      bypass_swapchains = getenv("WRAPPER_BYPASS_SWAPCHAIN_PLACED") ?
++                          atoi(getenv("WRAPPER_BYPASS_SWAPCHAIN_PLACED")) : 0; // TODO: turn on by default if safe
++
++   if (bypass_swapchains && dedicated_allocate_info && dedicated_allocate_info->image != VK_NULL_HANDLE) {
++      struct wrapper_image *img = get_wrapper_image_from_handle(device, dedicated_allocate_info->image);
++      if (img && img->is_wsi_image) {
++         WRAPPER_LOG(info, "Bypassing EXT_map_memory_placed emulation for swapchain image");
++         goto fallback;
++      }
++   }
++   
+    WRAPPER_LOG(info, "Emulating vkAllocateMemory");
+ 
+    simple_mtx_lock(&device->resource_mutex);
+@@ -509,13 +525,25 @@ wrapper_AllocateMemory(VkDevice _device,
+    if (result != VK_SUCCESS) {
+       WRAPPER_LOG(error, "Failed to allocate memory, res %d", result);
+       wrapper_device_memory_destroy(mem);
++
++      if (dedicated_allocate_info && dedicated_allocate_info->image != VK_NULL_HANDLE) {
++         struct wrapper_image *img = get_wrapper_image_from_handle(device, dedicated_allocate_info->image);
++         if (img && img->is_wsi_image) {
++            // Fixes failure to blit on ion-heap (< GKI 5.10) Mali devices at the cost of
++            // not being able to mmap these.
++            WRAPPER_LOG(error, "EXT_map_memory_placed emulation failed for swapchain image, bypassing emulation");
++            simple_mtx_lock(&device->resource_mutex);
++            goto fallback;
++         }
++      }
++
+       vk_error(device, result);
+    } else {
+       *pMemory = mem->dispatch_handle;
+    }
+ 
+ out:
+-   simple_mtx_unlock(&mem->device->resource_mutex);
++   simple_mtx_unlock(&device->resource_mutex);
+    return result;
+ 
+ fallback:
+diff --git a/src/vulkan/wrapper/wrapper_private.h b/src/vulkan/wrapper/wrapper_private.h
+index e54e376ff11..e101e233c93 100644
+--- a/src/vulkan/wrapper/wrapper_private.h
++++ b/src/vulkan/wrapper/wrapper_private.h
+@@ -108,6 +108,7 @@ struct wrapper_image {
+    VkImageCreateInfo info;
+ 
+    bool is_emulated_bgra8;
++   bool is_wsi_image;
+ };
+ 
+ struct wrapper_image *
+
+From 0a32eeeb9fa96f1edfa49aff28917cd237a45ba1 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Thu, 23 Jul 2026 21:49:22 +0800
+Subject: [PATCH 11/15] Fix
+ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT unlink
+
+---
+ src/vulkan/wrapper/wrapper_device.c | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index 9231d77b05d..0887708d768 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -501,17 +501,7 @@ wrapper_CreateImage(VkDevice _device,
+    VkImageCreateInfo create_info = *pCreateInfo;
+    bool is_emulated_bgra8 = false;
+    bool is_wsi_image = false;
+-
+-   // Wrapper specific extension for B8G8R8A8 AHB img emulation for the swapchain
+-   VkBaseInStructure *prev = (VkBaseInStructure *) pCreateInfo;
+-   for (const VkBaseInStructure *s = pCreateInfo->pNext; s; s = s->pNext) {
+-      if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT) {
+-         is_emulated_bgra8 = true;
+-         prev->pNext = s->pNext; // unlink
+-         break;
+-      }
+-      prev = (VkBaseInStructure *) s;
+-   }
++   VkBaseInStructure *prev = (VkBaseInStructure *) &create_info;
+ 
+    // Tag swapchain images using VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA
+    prev = (VkBaseInStructure *) pCreateInfo;
+@@ -522,6 +512,16 @@ wrapper_CreateImage(VkDevice _device,
+       }
+       prev = (VkBaseInStructure *) s;
+    }
++   
++   // Wrapper specific extension for B8G8R8A8 AHB img emulation for the swapchain
++   for (const VkBaseInStructure *s = create_info.pNext; s; s = s->pNext) {
++      if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT) {
++         is_emulated_bgra8 = true;
++         prev->pNext = s->pNext; // unlink
++         break;
++      }
++      prev = (VkBaseInStructure *) s;
++   }
+ 
+    if (is_emulated_bcn(device->physical, pCreateInfo->format)) {
+       create_info.format = get_format_for_bcn(pCreateInfo->format);
+
+From 29acb8c52daef60d5f280e04762d021b5b4e68a3 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Thu, 23 Jul 2026 21:54:43 +0800
+Subject: [PATCH 12/15] Fix deadlock in blit fallback path under win32 for Mali
+
+---
+ src/vulkan/wrapper/wrapper_device.c        | 7 ++++++-
+ src/vulkan/wrapper/wrapper_device_memory.c | 4 ++--
+ src/vulkan/wrapper/wrapper_private.h       | 3 +++
+ 3 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index 0887708d768..bbc2c27282f 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -48,12 +48,17 @@ get_wrapper_buffer_from_handle(struct wrapper_device *device, VkBuffer buffer) {
+    return wb;
+ }
+ 
++inline struct wrapper_image *
++get_wrapper_image_from_handle_locked(struct wrapper_device *device, VkImage image) {
++   return _mesa_hash_table_u64_search(device->image_table, (uint64_t) image);
++}
++
+ struct wrapper_image *
+ get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image) {
+    struct wrapper_image *wi = NULL;
+    
+    simple_mtx_lock(&device->resource_mutex);
+-   wi = _mesa_hash_table_u64_search(device->image_table, (uint64_t) image);
++   wi = get_wrapper_image_from_handle_locked(device, image);
+    simple_mtx_unlock(&device->resource_mutex);
+    
+    return wi;
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index 9a16e589ffe..b22efb4a189 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -527,12 +527,12 @@ wrapper_AllocateMemory(VkDevice _device,
+       wrapper_device_memory_destroy(mem);
+ 
+       if (dedicated_allocate_info && dedicated_allocate_info->image != VK_NULL_HANDLE) {
+-         struct wrapper_image *img = get_wrapper_image_from_handle(device, dedicated_allocate_info->image);
++         struct wrapper_image *img = get_wrapper_image_from_handle_locked(device, dedicated_allocate_info->image); // already locked
+          if (img && img->is_wsi_image) {
+             // Fixes failure to blit on ion-heap (< GKI 5.10) Mali devices at the cost of
+             // not being able to mmap these.
+             WRAPPER_LOG(error, "EXT_map_memory_placed emulation failed for swapchain image, bypassing emulation");
+-            simple_mtx_lock(&device->resource_mutex);
++            simple_mtx_unlock(&device->resource_mutex);
+             goto fallback;
+          }
+       }
+diff --git a/src/vulkan/wrapper/wrapper_private.h b/src/vulkan/wrapper/wrapper_private.h
+index e101e233c93..ad67f4d3122 100644
+--- a/src/vulkan/wrapper/wrapper_private.h
++++ b/src/vulkan/wrapper/wrapper_private.h
+@@ -111,6 +111,9 @@ struct wrapper_image {
+    bool is_wsi_image;
+ };
+ 
++struct wrapper_image *
++get_wrapper_image_from_handle_locked(struct wrapper_device *device, VkImage image);
++
+ struct wrapper_image *
+ get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image);
+ 
+
+From 2365fbcb25ba4e36ddefa4bb0083f22959ad32dc Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Thu, 23 Jul 2026 22:05:11 +0800
+Subject: [PATCH 13/15] Iterate through every one of handle->numFds for AHB
+ mmap
+
+See https://github.com/leegao/bionic-vulkan-wrapper/issues/157 and
+https://github.com/leegao/bionic-vulkan-wrapper/issues/70
+
+fixes this: 0110:err:vulkan:wine_vkMapMemory2KHR vkMapMemory2EXT failed:
+-5
+---
+ src/vulkan/wrapper/wrapper_device_memory.c | 40 ++++++++++++++++------
+ 1 file changed, 30 insertions(+), 10 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index b22efb4a189..dcc18ac0239 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -608,26 +608,46 @@ wrapper_MapMemory2KHR(VkDevice _device,
+ 
+    if (mem->ahardware_buffer) {
+       const native_handle_t *handle;
++      int idx;
+ 
+       handle = AHardwareBuffer_getNativeHandle(mem->ahardware_buffer);
+-      fd = handle->data[0];
++   
++      for (idx = 0; idx < handle->numFds; idx++) {
++         off_t size = lseek(handle->data[idx], 0, SEEK_END);
++         if (size < 0) {
++            WRAPPER_LOG(error, "lseek failed on AHB fd (idx=%d, fd=%d): errno %d, trying next fd",
++                        idx, handle->data[idx], errno);
++            continue;
++         }
++         if ((size_t)size >= mem->alloc_size)
++            break;
++      }
++      if (idx >= handle->numFds) {
++         WRAPPER_LOG(error, "No usable AHB fd with size >= alloc_size %zu", mem->alloc_size);
++         result = VK_ERROR_MEMORY_MAP_FAILED;
++         goto fail;
++      }
++      fd = handle->data[idx];
+    }
+    else {
+       fd = mem->fd;
+    }
+    
+    if (pMemoryMapInfo->size == VK_WHOLE_SIZE) {
+-      int res = lseek(fd, 0, SEEK_END);
+-      if (res < 0) {
+-         WRAPPER_LOG(error, "Failed lseek for file descriptor %d", fd);
+-         result = VK_ERROR_MEMORY_MAP_FAILED;
+-         goto fail;
++      if (mem->alloc_size > 0) {
++         mem->map_size = mem->alloc_size;
++      } else {
++         off_t res = lseek(fd, 0, SEEK_END);
++         if (res < 0) {
++            WRAPPER_LOG(error, "Failed lseek for file descriptor %d: errno %d", fd, errno);
++            result = VK_ERROR_MEMORY_MAP_FAILED;
++            goto fail;
++         }
++         mem->map_size = res;
+       }
+-      mem->map_size = mem->alloc_size > 0 ?
+-         mem->alloc_size : res;
+-   }
+-   else
++   } else {
+       mem->map_size = pMemoryMapInfo->size;
++   }
+ 
+    WRAPPER_LOG(info, "Mapping memory %p, address %p size %zu\n", pMemoryMapInfo->memory, placed_info->pPlacedAddress, mem->map_size);
+ 
+
+From 91677c79c6a7fe273726e73c9a0cfaeaafb728e9 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Fri, 24 Jul 2026 11:08:04 +0800
+Subject: [PATCH 14/15] Fixes crash of import memory with
+ vkMemoryDedicatedAllocateInfo that have mismatched import handles
+
+Currently, some drivers will hard-crash the dispatch->AllocateMemory (on
+older Mali drivers) if trying to import an image created with
+VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT
+
+See https://github.com/leegao/bionic-vulkan-wrapper/issues/157
+---
+ src/vulkan/wrapper/wrapper_device.c        | 64 +++++++++++++---------
+ src/vulkan/wrapper/wrapper_device_memory.c | 62 +++++++++++++++++++--
+ src/vulkan/wrapper/wrapper_private.h       |  8 +++
+ 3 files changed, 103 insertions(+), 31 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device.c b/src/vulkan/wrapper/wrapper_device.c
+index bbc2c27282f..0882a117fa1 100644
+--- a/src/vulkan/wrapper/wrapper_device.c
++++ b/src/vulkan/wrapper/wrapper_device.c
+@@ -37,12 +37,15 @@ const struct vk_device_extension_table wrapper_filter_extensions =
+    .EXT_image_compression_control_swapchain = true,
+ };
+ 
+-static struct wrapper_buffer *
+-get_wrapper_buffer_from_handle(struct wrapper_device *device, VkBuffer buffer) {
+-   struct wrapper_buffer *wb = NULL;
++inline struct wrapper_buffer *
++get_wrapper_buffer_from_handle_locked(struct wrapper_device *device, VkBuffer buffer) {
++   return _mesa_hash_table_u64_search(device->buffer_table, (uint64_t) buffer);
++}
+ 
++struct wrapper_buffer *
++get_wrapper_buffer_from_handle(struct wrapper_device *device, VkBuffer buffer) {
+    simple_mtx_lock(&device->resource_mutex);
+-   wb = _mesa_hash_table_u64_search(device->buffer_table, (uint64_t) buffer);
++   struct wrapper_buffer *wb = get_wrapper_buffer_from_handle_locked(device, buffer);
+    simple_mtx_unlock(&device->resource_mutex);
+ 
+    return wb;
+@@ -54,11 +57,9 @@ get_wrapper_image_from_handle_locked(struct wrapper_device *device, VkImage imag
+ }
+ 
+ struct wrapper_image *
+-get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image) {
+-   struct wrapper_image *wi = NULL;
+-   
++get_wrapper_image_from_handle(struct wrapper_device *device, VkImage image) {   
+    simple_mtx_lock(&device->resource_mutex);
+-   wi = get_wrapper_image_from_handle_locked(device, image);
++   struct wrapper_image *wi = get_wrapper_image_from_handle_locked(device, image);
+    simple_mtx_unlock(&device->resource_mutex);
+    
+    return wi;
+@@ -401,6 +402,13 @@ wrapper_CreateBuffer(VkDevice _device,
+ {
+    VK_FROM_HANDLE(wrapper_device, device, _device);
+    VkResult res;
++   VkExternalMemoryHandleTypeFlags handle_types = 0;
++
++   const VkExternalMemoryBufferCreateInfo *ext_info =
++      vk_find_struct_const(pCreateInfo->pNext, EXTERNAL_MEMORY_BUFFER_CREATE_INFO);
++   if (ext_info) {
++      handle_types = ext_info->handleTypes;
++   }
+ 
+    res = device->dispatch_table.CreateBuffer(device->dispatch_handle,
+       pCreateInfo, pAllocator, pBuffer);
+@@ -420,16 +428,17 @@ wrapper_CreateBuffer(VkDevice _device,
+       simple_mtx_unlock(&device->resource_mutex);
+       return VK_ERROR_OUT_OF_HOST_MEMORY;
+    }
+-      
++
+    wb->device = device;
+    wb->size = pCreateInfo->size;
+    wb->dispatch_handle = *pBuffer;
++   wb->handle_types = handle_types;
+ 
+    list_add(&wb->link, &device->buffer_list);
+    _mesa_hash_table_u64_insert(device->buffer_table, (uint64_t)wb->dispatch_handle, wb);
+ 
+    simple_mtx_unlock(&device->resource_mutex);
+-   
++
+    return VK_SUCCESS;
+ }
+ 
+@@ -497,28 +506,19 @@ wrapper_image_destroy(struct wrapper_device *device,
+ 
+ VKAPI_ATTR VkResult VKAPI_CALL
+ wrapper_CreateImage(VkDevice _device,
+-					const VkImageCreateInfo *pCreateInfo,
+-					const VkAllocationCallbacks *pAllocator,
+-					VkImage *pImage)
++			 const VkImageCreateInfo *pCreateInfo,
++			 const VkAllocationCallbacks *pAllocator,
++			 VkImage *pImage)
+ {
+    VK_FROM_HANDLE(wrapper_device, device, _device);
+    VkResult res;
+    VkImageCreateInfo create_info = *pCreateInfo;
+    bool is_emulated_bgra8 = false;
+    bool is_wsi_image = false;
+-   VkBaseInStructure *prev = (VkBaseInStructure *) &create_info;
++   VkExternalMemoryHandleTypeFlags handle_types = 0;
+ 
+-   // Tag swapchain images using VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA
+-   prev = (VkBaseInStructure *) pCreateInfo;
+-   for (const VkBaseInStructure *s = pCreateInfo->pNext; s; s = s->pNext) {
+-      if (s->sType == VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA) {
+-         is_wsi_image = true;
+-         break;
+-      }
+-      prev = (VkBaseInStructure *) s;
+-   }
+-   
+    // Wrapper specific extension for B8G8R8A8 AHB img emulation for the swapchain
++   VkBaseInStructure *prev = (VkBaseInStructure *) &create_info;
+    for (const VkBaseInStructure *s = create_info.pNext; s; s = s->pNext) {
+       if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT) {
+          is_emulated_bgra8 = true;
+@@ -528,6 +528,19 @@ wrapper_CreateImage(VkDevice _device,
+       prev = (VkBaseInStructure *) s;
+    }
+ 
++   // Tag swapchain images using VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA
++   const struct wsi_image_create_info *wsi_info =
++      vk_find_struct_const(pCreateInfo->pNext, WSI_IMAGE_CREATE_INFO_MESA);
++   if (wsi_info) {
++      is_wsi_image = true;
++   }
++
++   const VkExternalMemoryImageCreateInfo *ext_info =
++      vk_find_struct_const(pCreateInfo->pNext, EXTERNAL_MEMORY_IMAGE_CREATE_INFO);
++   if (ext_info) {
++      handle_types = ext_info->handleTypes;
++   }
++
+    if (is_emulated_bcn(device->physical, pCreateInfo->format)) {
+       create_info.format = get_format_for_bcn(pCreateInfo->format);
+       if (create_info.flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT)
+@@ -536,7 +549,7 @@ wrapper_CreateImage(VkDevice _device,
+ 
+    res = device->dispatch_table.CreateImage(device->dispatch_handle,
+       &create_info, pAllocator, pImage);
+-   
++
+    if (res != VK_SUCCESS) {
+       WRAPPER_LOG(error, "Failed to create image, res %d", res);
+       return res;
+@@ -558,6 +571,7 @@ wrapper_CreateImage(VkDevice _device,
+    wi->dispatch_handle = *pImage;
+    wi->is_emulated_bgra8 = is_emulated_bgra8;
+    wi->is_wsi_image = is_wsi_image;
++   wi->handle_types = handle_types;
+ 
+    list_add(&wi->link, &device->image_list);
+    _mesa_hash_table_u64_insert(device->image_table, (uint64_t)wi->dispatch_handle, wi);
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index dcc18ac0239..0fb492e7f60 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -201,6 +201,36 @@ wrapper_select_allowed_device_memory_type(struct wrapper_device *device,
+    return UINT32_MAX;
+ }
+ 
++static VkResult check_dedicated_allocate_info_for(struct wrapper_device *device,
++                                              const VkMemoryDedicatedAllocateInfo *memory_dedicated_info,
++                                              VkExternalMemoryHandleTypeFlags handle_types) {
++   if (!memory_dedicated_info) {
++      return VK_SUCCESS;
++   }
++
++   if (memory_dedicated_info->image != VK_NULL_HANDLE) {
++      struct wrapper_image *img = get_wrapper_image_from_handle_locked(
++         device, memory_dedicated_info->image);
++      if (!img || !(img->handle_types & handle_types)) {
++         WRAPPER_LOG(info, "Dedicated image handle type mismatch (0x%x vs required 0x%x)",
++                        img ? img->handle_types : 0, handle_types);
++         return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++      }
++   }
++
++   if (memory_dedicated_info->buffer != VK_NULL_HANDLE) {
++      struct wrapper_buffer *buf = get_wrapper_buffer_from_handle_locked(
++         device, memory_dedicated_info->buffer);
++      if (!buf || !(buf->handle_types & handle_types)) {
++         WRAPPER_LOG(info, "Dedicated buffer handle type mismatch (0x%x vs required 0x%x)",
++                        buf ? buf->handle_types : 0, handle_types);
++         return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++      }
++   }
++
++   return VK_SUCCESS;
++}
++
+ static VkResult
+ wrapper_allocate_memory_dmaheap(struct wrapper_device *device,
+                                 const VkMemoryAllocateInfo* pAllocateInfo,
+@@ -239,6 +269,14 @@ wrapper_allocate_memory_dmaheap(struct wrapper_device *device,
+       return VK_ERROR_INVALID_EXTERNAL_HANDLE;
+    }
+ 
++   const VkMemoryDedicatedAllocateInfo *memory_dedicated_info =
++      vk_find_struct_const(pAllocateInfo->pNext, MEMORY_DEDICATED_ALLOCATE_INFO);
++   result = check_dedicated_allocate_info_for(
++      device, memory_dedicated_info, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
++   if (result != VK_SUCCESS) {
++      return result;
++   }
++
+    import_fd_info = (VkImportMemoryFdInfoKHR) {
+       .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+       .pNext = pAllocateInfo->pNext,
+@@ -271,6 +309,14 @@ wrapper_allocate_memory_opaque_fd(struct wrapper_device *device,
+    VkResult result;
+    VkMemoryAllocateInfo allocate_info;
+ 
++   const VkMemoryDedicatedAllocateInfo *memory_dedicated_info =
++      vk_find_struct_const(pAllocateInfo->pNext, MEMORY_DEDICATED_ALLOCATE_INFO);
++   result = check_dedicated_allocate_info_for(
++      device, memory_dedicated_info, VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
++   if (result != VK_SUCCESS) {
++      return result;
++   }
++
+    VkExportMemoryAllocateInfo export_memory_info = {
+       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+       .pNext = NULL,
+@@ -317,19 +363,22 @@ wrapper_allocate_memory_ahardware_buffer(struct wrapper_device *device,
+                                          AHardwareBuffer **pAHardwareBuffer) {
+    VkExportMemoryAllocateInfo export_memory_info;
+    VkMemoryAllocateInfo allocate_info;
+-   const VkMemoryDedicatedAllocateInfo *memory_dedicated_info = NULL;
+    VkResult result;
+ 
+-   
++   const VkMemoryDedicatedAllocateInfo *memory_dedicated_info =
++      vk_find_struct_const(pAllocateInfo->pNext, MEMORY_DEDICATED_ALLOCATE_INFO);
++   result = check_dedicated_allocate_info_for(
++      device, memory_dedicated_info, VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID);
++   if (result != VK_SUCCESS) {
++      return result;
++   }
++
+    export_memory_info = (VkExportMemoryAllocateInfo) {
+       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+       .pNext = pAllocateInfo->pNext,
+       .handleTypes =
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,
+    };
+-
+-   memory_dedicated_info = vk_find_struct_const(pAllocateInfo->pNext, MEMORY_DEDICATED_ALLOCATE_INFO);
+-  
+    allocate_info = *pAllocateInfo;
+    allocate_info.pNext = &export_memory_info;
+   
+@@ -527,7 +576,8 @@ wrapper_AllocateMemory(VkDevice _device,
+       wrapper_device_memory_destroy(mem);
+ 
+       if (dedicated_allocate_info && dedicated_allocate_info->image != VK_NULL_HANDLE) {
+-         struct wrapper_image *img = get_wrapper_image_from_handle_locked(device, dedicated_allocate_info->image); // already locked
++         struct wrapper_image *img = get_wrapper_image_from_handle_locked(
++            device, dedicated_allocate_info->image); // already locked
+          if (img && img->is_wsi_image) {
+             // Fixes failure to blit on ion-heap (< GKI 5.10) Mali devices at the cost of
+             // not being able to mmap these.
+diff --git a/src/vulkan/wrapper/wrapper_private.h b/src/vulkan/wrapper/wrapper_private.h
+index ad67f4d3122..6cc6d24d0cc 100644
+--- a/src/vulkan/wrapper/wrapper_private.h
++++ b/src/vulkan/wrapper/wrapper_private.h
+@@ -91,8 +91,15 @@ struct wrapper_buffer {
+    int is_mapped;
+    VkDeviceMemory memory;
+    struct wrapper_command_buffer *wcb;
++   VkExternalMemoryHandleTypeFlags handle_types;
+ };
+ 
++struct wrapper_buffer *
++get_wrapper_buffer_from_handle_locked(struct wrapper_device *device, VkBuffer buffer);
++
++struct wrapper_buffer *
++get_wrapper_buffer_from_handle(struct wrapper_device *device, VkBuffer buffer);
++
+ #define VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EMULATED_B8G8R8A8_CREATE_INFO_EXT 1000701234
+ typedef struct VkEmulatedB8G8R8A8CreateInfoExt {
+     VkStructureType          sType;
+@@ -109,6 +116,7 @@ struct wrapper_image {
+ 
+    bool is_emulated_bgra8;
+    bool is_wsi_image;
++   VkExternalMemoryHandleTypeFlags handle_types;
+ };
+ 
+ struct wrapper_image *
+
+From 573e846072efb493befc23b0a5d27a7e96cf8477 Mon Sep 17 00:00:00 2001
+From: leegao <lg342@cornell.edu>
+Date: Sun, 26 Jul 2026 15:51:37 +0800
+Subject: [PATCH 15/15] Address comments for check_dedicated_allocate_info_for
+ by lifting the handle check up to vkAllocateMemory
+
+---
+ src/vulkan/wrapper/wrapper_device_memory.c | 84 +++++++++++++++++-----
+ 1 file changed, 68 insertions(+), 16 deletions(-)
+
+diff --git a/src/vulkan/wrapper/wrapper_device_memory.c b/src/vulkan/wrapper/wrapper_device_memory.c
+index 0fb492e7f60..99f637c1f53 100644
+--- a/src/vulkan/wrapper/wrapper_device_memory.c
++++ b/src/vulkan/wrapper/wrapper_device_memory.c
+@@ -201,6 +201,27 @@ wrapper_select_allowed_device_memory_type(struct wrapper_device *device,
+    return UINT32_MAX;
+ }
+ 
++static inline void
++unlink_memory_alloc_info_pnext(VkMemoryAllocateInfo *alloc_info, VkStructureType sType)
++{
++   const VkBaseInStructure *head = (const VkBaseInStructure *)alloc_info->pNext;
++   if (head && head->sType == sType) {
++      alloc_info->pNext = head->pNext;
++      return;
++   }
++
++   VkBaseOutStructure *prev = NULL;
++   vk_foreach_struct(s, (void *)alloc_info->pNext) {
++      if (s->sType == sType) {
++         if (prev) {
++            prev->pNext = s->pNext; // modifies application owned memory, but it should be okay
++         }
++         return;
++      }
++      prev = s;
++   }
++}
++
+ static VkResult check_dedicated_allocate_info_for(struct wrapper_device *device,
+                                               const VkMemoryDedicatedAllocateInfo *memory_dedicated_info,
+                                               VkExternalMemoryHandleTypeFlags handle_types) {
+@@ -211,9 +232,10 @@ static VkResult check_dedicated_allocate_info_for(struct wrapper_device *device,
+    if (memory_dedicated_info->image != VK_NULL_HANDLE) {
+       struct wrapper_image *img = get_wrapper_image_from_handle_locked(
+          device, memory_dedicated_info->image);
+-      if (!img || !(img->handle_types & handle_types)) {
+-         WRAPPER_LOG(info, "Dedicated image handle type mismatch (0x%x vs required 0x%x)",
+-                        img ? img->handle_types : 0, handle_types);
++      if (img && img->handle_types && !(img->handle_types & handle_types)) {
++         // Shouldn't happen anymore
++         WRAPPER_LOG(error, "Dedicated image handle type mismatch (0x%x vs required 0x%x)",
++                     img ? img->handle_types : 0, handle_types);
+          return VK_ERROR_INVALID_EXTERNAL_HANDLE;
+       }
+    }
+@@ -221,9 +243,10 @@ static VkResult check_dedicated_allocate_info_for(struct wrapper_device *device,
+    if (memory_dedicated_info->buffer != VK_NULL_HANDLE) {
+       struct wrapper_buffer *buf = get_wrapper_buffer_from_handle_locked(
+          device, memory_dedicated_info->buffer);
+-      if (!buf || !(buf->handle_types & handle_types)) {
+-         WRAPPER_LOG(info, "Dedicated buffer handle type mismatch (0x%x vs required 0x%x)",
+-                        buf ? buf->handle_types : 0, handle_types);
++      if (buf && buf->handle_types && !(buf->handle_types & handle_types)) {
++         // Shouldn't happen anymore
++         WRAPPER_LOG(error, "Dedicated buffer handle type mismatch (0x%x vs required 0x%x)",
++                     buf ? buf->handle_types : 0, handle_types);
+          return VK_ERROR_INVALID_EXTERNAL_HANDLE;
+       }
+    }
+@@ -537,38 +560,67 @@ wrapper_AllocateMemory(VkDevice _device,
+       vk_error(device, result);
+       goto out;
+    }
++
++   VkExternalMemoryHandleTypeFlags valid_handle_types = 0;
++   if (dedicated_allocate_info) {
++      // Note that buffer/image are mutually exclusive
++      if (dedicated_allocate_info->image != VK_NULL_HANDLE) {
++         struct wrapper_image *img = get_wrapper_image_from_handle_locked(device, dedicated_allocate_info->image);
++         if (img) {
++            valid_handle_types |= img->handle_types;
++         }
++      }
++      if (dedicated_allocate_info->buffer != VK_NULL_HANDLE) {
++         struct wrapper_buffer *buf = get_wrapper_buffer_from_handle_locked(device, dedicated_allocate_info->buffer);
++         if (buf) {
++            valid_handle_types |= buf->handle_types;
++         }
++      }
++   }
++
++   VkMemoryAllocateInfo memory_allocate_info = *pAllocateInfo;
++   if (dedicated_allocate_info && valid_handle_types == 0) {
++      // Driver "bug" on some mobile drivers - providing an empty dedicate memory hint in conjunction with the
++      // VkImportMemoryFdInfoKHR / VkExportMemoryAllocateInfo could crash the driver
++      unlink_memory_alloc_info_pnext(&memory_allocate_info, VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO);
++   }
+    
+    if (strstr(device->physical->resource_type, "ahb")) {
+       WRAPPER_LOG(info, "Using AHardwareBuffer memory backend");
+       result = wrapper_allocate_memory_ahardware_buffer(device,
+-         pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->ahardware_buffer);
++         &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->ahardware_buffer);
+    }
+    else if (strstr(device->physical->resource_type, "dmabuf")) {
+       WRAPPER_LOG(info, "Using DMABUF memory backend");
+       result = wrapper_allocate_memory_dmaheap(device,
+-         pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->fd);
++         &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->fd);
+    }
+    else if (strstr(device->physical->resource_type, "opaque")) {
+       WRAPPER_LOG(info, "Using opaque fd memory backend");
+       result = wrapper_allocate_memory_opaque_fd(device,
+-         pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->fd);
++         &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->fd);
+    }
+    else {
+       WRAPPER_LOG(info, "Using auto memory backend");
+-      result = wrapper_allocate_memory_dmaheap(device,
+-         pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->fd);
++      result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
++#define VALID_HANDLE(type) (valid_handle_types == 0 || (type & valid_handle_types) != 0)
++      if (VALID_HANDLE(VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT)) {
++         result = wrapper_allocate_memory_dmaheap(device,
++            &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->fd);
++      }
+ 
+-      if (result != VK_SUCCESS) {
++      if (result != VK_SUCCESS && VALID_HANDLE(VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
+          wrapper_device_memory_reset(mem);
+          result = wrapper_allocate_memory_ahardware_buffer(device,
+-            pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->ahardware_buffer);
++            &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->ahardware_buffer);
+       }
+ 
+-      if (result != VK_SUCCESS) {
++      if (result != VK_SUCCESS && VALID_HANDLE(VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT)) {
+          wrapper_device_memory_reset(mem);
+          result = wrapper_allocate_memory_opaque_fd(device,
+-            pAllocateInfo, pAllocator, &mem->dispatch_handle, &mem->fd);
++            &memory_allocate_info, pAllocator, &mem->dispatch_handle, &mem->fd);
+       }
++#undef VALID_HANDLE
+    }
+    
+    if (result != VK_SUCCESS) {
+@@ -583,7 +635,7 @@ wrapper_AllocateMemory(VkDevice _device,
+             // not being able to mmap these.
+             WRAPPER_LOG(error, "EXT_map_memory_placed emulation failed for swapchain image, bypassing emulation");
+             simple_mtx_unlock(&device->resource_mutex);
+-            goto fallback;
++            goto fallback; // TODO: the VkMemoryAllocateInfo may have been unlinked here
+          }
+       }
+ 
