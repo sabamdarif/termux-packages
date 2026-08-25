@@ -1,0 +1,30 @@
+diff --git a/subprojects/libadrenotools/lib/linkernsbypass/android_linker_ns.cpp b/subprojects/libadrenotools/lib/linkernsbypass/android_linker_ns.cpp
+index 3bd5899..126637d 100644
+--- a/subprojects/libadrenotools/lib/linkernsbypass/android_linker_ns.cpp
++++ b/subprojects/libadrenotools/lib/linkernsbypass/android_linker_ns.cpp
+@@ -12,6 +12,7 @@
+ #include <android/log.h>
+ #include <android/api-level.h>
+ #include <sys/mman.h>
++#include <sys/syscall.h>
+ #include "elf_soname_patcher.h"
+ #include "android_linker_ns.h"
+ 
+@@ -70,9 +71,17 @@ void *linkernsbypass_namespace_dlopen(const char *filename, int flags, android_n
+     return android_dlopen_ext(filename, flags, &extInfo);
+ }
+ 
++// <sys/syscall.h> supplies __NR_memfd_create for every architecture supported by
++// the NDK; the fallbacks below only matter for sysroots that predate it.
+ #ifndef __NR_memfd_create
+     #if defined(__aarch64__)
+         #define __NR_memfd_create 279
++    #elif defined(__arm__)
++        #define __NR_memfd_create 385
++    #elif defined(__i386__)
++        #define __NR_memfd_create 356
++    #elif defined(__x86_64__)
++        #define __NR_memfd_create 319
+     #else
+         #error Unsupported target architecture!
+     #endif

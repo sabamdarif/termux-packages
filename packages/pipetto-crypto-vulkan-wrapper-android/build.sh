@@ -8,6 +8,11 @@ TERMUX_PKG_REVISION=2
 TERMUX_PKG_SRCURL=git+https://github.com/Pipetto-crypto/mesa
 TERMUX_PKG_GIT_BRANCH=wrapper-25
 _COMMIT=7eae6442f5d8a7414e66adc0d42857c143f20fa9
+# Fetched by hand in termux_step_post_get_source instead of letting meson
+# resolve subprojects/libadrenotools.wrap, so that our patches can be applied
+# to it by termux_step_patch_package.
+_ADRENOTOOLS_SRCURL=https://github.com/Pipetto-crypto/libadrenotools
+_ADRENOTOOLS_COMMIT=8483dfdaa2abf97ee89ad0e5f337e7b508550c6b
 TERMUX_PKG_DEPENDS="libandroid-shmem, libc++, libdrm, libx11, libxcb, libxshmfence, libwayland, vulkan-loader-generic, zlib, zstd"
 TERMUX_PKG_BUILD_DEPENDS="libwayland-protocols, libxrandr, xorgproto"
 TERMUX_PKG_API_LEVEL=26
@@ -31,6 +36,14 @@ termux_step_post_get_source() {
 	git checkout $_COMMIT
 	# Do not use meson wrap projects
 	# rm -rf subprojects
+
+	# meson only downloads a subproject when its directory does not exist yet,
+	# so populating it here keeps the wrap unused and makes the sources
+	# available to termux_step_patch_package.
+	rm -rf subprojects/libadrenotools
+	git clone --recursive $_ADRENOTOOLS_SRCURL subprojects/libadrenotools
+	git -C subprojects/libadrenotools checkout $_ADRENOTOOLS_COMMIT
+	git -C subprojects/libadrenotools submodule update --init --recursive
 }
 
 termux_step_pre_configure() {

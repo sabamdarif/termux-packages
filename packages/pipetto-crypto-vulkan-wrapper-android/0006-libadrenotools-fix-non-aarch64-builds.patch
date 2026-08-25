@@ -1,0 +1,53 @@
+diff --git a/subprojects/libadrenotools/src/bcenabler.cpp b/subprojects/libadrenotools/src/bcenabler.cpp
+index 1deb41d..69c4c23 100644
+--- a/subprojects/libadrenotools/src/bcenabler.cpp
++++ b/subprojects/libadrenotools/src/bcenabler.cpp
+@@ -7,7 +7,9 @@
+ #include <sys/mman.h>
+ #include <unistd.h>
+ #include <adrenotools/bcenabler.h>
++#ifdef __aarch64__
+ #include "gen/bcenabler_patch.h"
++#endif
+ 
+ enum adrenotools_bcn_type adrenotools_get_bcn_type(uint32_t major, uint32_t minor, uint32_t vendorId) {
+     if (vendorId != 0x5143 || major != 512)
+@@ -19,6 +21,8 @@ enum adrenotools_bcn_type adrenotools_get_bcn_type(uint32_t major, uint32_t mino
+     return ADRENOTOOLS_BCN_PATCH;
+ }
+ 
++#ifdef __aarch64__
++
+ // Searches /proc/self/maps for the first free page after the given address
+ static void *find_free_page(uintptr_t address) {
+     std::ifstream procMaps("/proc/self/maps");
+@@ -133,3 +137,14 @@ bool adrenotools_patch_bcn(void *vkGetPhysicalDeviceFormatPropertiesFn) {
+     // Done!
+     return true;
+ }
++
++#else
++
++// PatchRawData is AArch64 machine code and the fixups above decode AArch64
++// B/BL encodings, so there is nothing meaningful to patch on other targets.
++bool adrenotools_patch_bcn(void *vkGetPhysicalDeviceFormatPropertiesFn) {
++    (void)vkGetPhysicalDeviceFormatPropertiesFn;
++    return false;
++}
++
++#endif
+diff --git a/subprojects/libadrenotools/src/hook/hook_impl.cpp b/subprojects/libadrenotools/src/hook/hook_impl.cpp
+index 50e79a9..a8471b3 100644
+--- a/subprojects/libadrenotools/src/hook/hook_impl.cpp
++++ b/subprojects/libadrenotools/src/hook/hook_impl.cpp
+@@ -207,7 +207,9 @@ __attribute__((visibility("default"))) int hook_gsl_memory_free_pure(void *memDe
+             kgsl_fd = open("/dev/kgsl-3d0", O_RDWR);
+ 
+         kgsl_gpumem_get_info info{
+-            .gpuaddr = gslMemDesc->gpuaddr
++            // kgsl_gpumem_get_info::gpuaddr is unsigned long, which is narrower
++            // than GslMemDesc::gpuaddr on 32-bit targets
++            .gpuaddr = static_cast<unsigned long>(gslMemDesc->gpuaddr)
+         };
+ 
+         if (ioctl(kgsl_fd, IOCTL_KGSL_GPUMEM_GET_INFO, &info) < 0) {
